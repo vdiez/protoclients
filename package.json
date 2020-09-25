@@ -1,0 +1,26 @@
+{
+  "name": "@vdiez/protoclients",
+  "version": "0.0.1",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@marsaud/smb2": "^0.17.1",
+    "aws-sdk": "^2.757.0",
+    "chokidar": "^3.4.2",
+    "fs-extra": "^9.0.1",
+    "ftp": "^0.3.10",
+    "get-stream": "^6.0.0",
+    "got": "^11.7.0",
+    "is-stream": "^2.0.0",
+    "mime-types": "^2.1.27",
+    "moment": "^2.29.0",
+    "parallel_limit": "^1.0.6",
+    "ssh2": "^0.8.9"
+  }
+}
