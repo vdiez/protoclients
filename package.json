@@ -11,7 +11,7 @@
   "license": "ISC",
   "dependencies": {
     "@marsaud/smb2": "^0.17.1",
-    "aws-sdk": "^2.757.0",
+    "aws-sdk": "^2.761.0",
     "chokidar": "^3.4.2",
     "fs-extra": "^9.0.1",
     "ftp": "^0.3.10",
