@@ -19,10 +19,10 @@ module.exports = class extends base {
             this.options.binaryInterval = params.polling_interval;
         }
     }
-    init_watcher(dirname) {
+    init_watcher(dirname, ignored) {
         return fs.mkdirp(dirname, {mode: 0o2775})
             .then(() => new Promise((resolve, reject) => {
-                this.watcher = chokidar.watch(dirname, {ignored: /[\/\\]\./, ignorePermissionErrors: true, ...this.options});
+                this.watcher = chokidar.watch(dirname, {ignored: ignored, ignorePermissionErrors: true, ...this.options});
                 this.watcher.on('add', (path, stats) => this.on_file_added(this.constructor.normalize_path(path), stats));
                 this.watcher.on('change', (path, stats) => this.on_file_added(this.constructor.normalize_path(path), stats));
                 this.watcher.on('unlink', (path) => this.on_file_removed(path));

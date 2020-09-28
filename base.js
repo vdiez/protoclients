@@ -45,7 +45,7 @@ module.exports = class {
             })
         );
     }
-    walk(dirname) {}
+    walk(dirname, ignored) {}
     init_watcher(dirname, ignored) {
         if (!this.started) return;
         this.now = moment().format('YYYYMMDDHHmmssSSS');

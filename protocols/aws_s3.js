@@ -68,9 +68,9 @@ module.exports = class extends base {
     remove(target) {
         return this.queue.run(() => this.S3.deleteObject({Bucket: this.bucket, Key: target}).promise());
     }
-    move(source, target, source_bucket) {
-        return this.queue.run(() => this.S3.copyObject({Bucket: this.bucket, Key: target, CopySource: encodeURI((source_bucket || this.bucket) + "/" + source)}).promise()
-            .then(()=> this.S3.deleteObject({Bucket: (source_bucket || this.bucket), Key: source}, ).promise()))
+    move(source, target, params) {
+        return this.queue.run(() => this.S3.copyObject({Bucket: this.bucket, Key: target, CopySource: encodeURI((params.origin_bucket || this.bucket) + "/" + source)}).promise()
+            .then(()=> this.S3.deleteObject({Bucket: (params.origin_bucket || this.bucket), Key: source}, ).promise()))
     }
     walk(dirname, ignored, token) {
         return this.queue.run(() => this.S3.listObjectsV2({Bucket: this.bucket, Prefix: this.constructor.normalize_path(dirname), ContinuationToken: token}).promise())
