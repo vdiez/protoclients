@@ -11,9 +11,9 @@ module.exports = class {
         this.timeout = null;
         this.disconnect_timeout = null;
         this.on_error = () => {};
-        this.on_complete = () => {};
-        this.on_start = () => {};
-        this.on_stop = () => {};
+        this.on_watch_complete = () => {};
+        this.on_watch_start = () => {};
+        this.on_watch_stop = () => {};
         this.on_file_added = () => {};
         this.on_file_removed = () => {};
         this.update_settings(params);
@@ -66,14 +66,14 @@ module.exports = class {
     start_watch(dirname, ignored = /(^|[\/\\])\../) {//(^|[\/\\])\.+([^\/\\\.]|$)/
         if (this.started) return;
         this.started = true;
-        this.on_start();
-        return this.init_watcher(this.constructor.normalize_path(dirname), ignored).then(() => this.on_complete());
+        this.on_watch_start();
+        return this.init_watcher(this.constructor.normalize_path(dirname), ignored).then(() => this.on_watch_complete());
     }
     stop_watch(kill) {
         clearTimeout(this.timeout);
         this.polling = false;
         this.started = false;
-        this.on_stop();
+        this.on_watch_stop();
         return Promise.resolve()
             .then(() => this.destroy_watcher())
             .then(() => {
