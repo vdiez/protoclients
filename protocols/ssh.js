@@ -10,7 +10,7 @@ module.exports = class extends base {
         this.connection = null;
     }
     static generate_id(params) {
-        return JSON.stringify({host: params.host, user: params.username, password: params.password, port: params.port});
+        return JSON.stringify({protocol: 'ssh', host: params.host, user: params.username, password: params.password, port: params.port});
     }
     update_settings(params) {
         params.parallel_parsers = 1;

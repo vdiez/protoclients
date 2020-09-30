@@ -10,7 +10,7 @@ module.exports = class extends base {
         this.connection = null;
     }
     static generate_id(params) {
-        return JSON.stringify({share: "\\\\" + params.host + "\\" + params.share, username: params.username, password: params.password, port: params.port, domain: params.domain});
+        return JSON.stringify({protocol: 'smb', share: "\\\\" + params.host + "\\" + params.share, username: params.username, password: params.password, port: params.port, domain: params.domain});
     }
     update_settings(params) {
         params.parallel_parsers = 1;

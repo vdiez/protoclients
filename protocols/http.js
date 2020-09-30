@@ -7,7 +7,7 @@ module.exports = class extends base {
         super(params, logger, "http");
     }
     static generate_id(params) {
-        return this.protocol;
+        return 'http';
     }
     update_settings(params) {
         super.update_settings(params);

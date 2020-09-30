@@ -10,7 +10,7 @@ module.exports = class extends base {
         this.connection = null;
     }
     static generate_id(params) {
-        return JSON.stringify({host: params.host, user: params.username, password: params.password, port: params.port, secure: params.secure});
+        return JSON.stringify({protocol: 'ftp', host: params.host, user: params.username, password: params.password, port: params.port, secure: params.secure});
     }
     update_settings(params) {
         params.parallel_parsers = 1;

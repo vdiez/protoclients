@@ -8,7 +8,7 @@ module.exports = class extends base {
         super(params, logger, "aws_s3");
     }
     static generate_id(params) {
-        return JSON.stringify({accessKeyId: params.access_key, secretAccessKey: params.secret, region: params.region});
+        return JSON.stringify({protocol: 'aws_s3', accessKeyId: params.access_key, secretAccessKey: params.secret, region: params.region});
     }
     update_settings(params) {
         params.parallel_parsers = 1;
