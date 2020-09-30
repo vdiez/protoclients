@@ -19,8 +19,8 @@ module.exports = class {
         this.on_file_removed = () => {};
         this.update_settings(params);
     }
-    id(params) {
-        return this.constructor.generate_id(params);
+    id() {
+        return this.constructor.generate_id(this.params);
     }
     update_settings(params) {
         this.params = params;
