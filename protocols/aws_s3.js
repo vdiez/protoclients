@@ -11,6 +11,7 @@ module.exports = class extends base {
         return JSON.stringify({accessKeyId: params.access_key, secretAccessKey: params.secret, region: params.region});
     }
     update_settings(params) {
+        params.parallel_parsers = 1;
         this.bucket = params.bucket;
         if (this.id() !== this.constructor.generate_id(params)) this.S3 = new S3({accessKeyId: params.access_key, secretAccessKey: params.secret, region: params.region});
         super.update_settings(params);
