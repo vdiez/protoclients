@@ -79,7 +79,7 @@ module.exports = class extends base {
                 let list = data.Contents || [];
                 for (let i = 0; i < list.length; i++) {
                     let {Key, Size} = list[i];
-                    if (Key.match(ignored)) return;
+                    if (Key.match(ignored)) continue;
                     if (!Key.endsWith('/')) {
                         if (!this.fileObjects[Key] || (this.fileObjects[Key] && Size !== this.fileObjects[Key].size)) this.on_file_added(Key, {size: Size, mtime: list[i].LastModified, isDirectory: () => Key.endsWith('/')});
                         this.fileObjects[Key] = {last_seen: this.now, size: Size};
