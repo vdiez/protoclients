@@ -152,7 +152,7 @@ module.exports = class extends base {
                 let filename = path.posix.join(dirname, file.filename);
                 if (filename.match(ignored)) return;
                 if (file.attrs.isDirectory()) return this.walk(filename, ignored);
-                if (!this.fileObjects[filename] || (this.fileObjects[filename] && file.attrs.size !== this.fileObjects[filename].size)) this.add(filename, file.attrs);
+                if (!this.fileObjects[filename] || (this.fileObjects[filename] && file.attrs.size !== this.fileObjects[filename].size)) this.on_file_added(filename, file.attrs);
                 this.fileObjects[filename] = {last_seen: this.now, size: file.attrs.size};
             })
             .catch(err => {
