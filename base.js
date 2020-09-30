@@ -7,6 +7,7 @@ module.exports = class {
     constructor(params, logger, protocol) {
         this.logger = logger;
         this.protocol = protocol;
+        this.params = {};
         this.fileObjects = {};
         this.timeout = null;
         this.disconnect_timeout = null;
@@ -18,8 +19,8 @@ module.exports = class {
         this.on_file_removed = () => {};
         this.update_settings(params);
     }
-    id() {
-        return this.constructor.generate_id(this.params.id);
+    id(params) {
+        return this.constructor.generate_id(params);
     }
     update_settings(params) {
         this.params = params;
