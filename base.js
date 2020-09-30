@@ -1,6 +1,7 @@
 let path = require('path');
 const get_stream = require('get-stream');
 const is_stream = require('is-stream');
+let moment = require('moment');
 
 module.exports = class {
     static parameters = ["parallel_parsers", "polling", "polling_interval"];
