@@ -51,6 +51,7 @@ module.exports = class extends base {
     }
     copy(source, target, streams, size, params) {
         return this.queue.run(() => new Promise((resolve, reject) => {
+            if (!streams.readStream) streams.readStream = fs.createReadStream(source)
             streams.writeStream = fs.createWriteStream(target);
             streams.writeStream.on('error', err => reject(err));
             streams.readStream.on('error', err => reject(err));

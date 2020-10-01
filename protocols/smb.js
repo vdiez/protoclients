@@ -44,6 +44,7 @@ module.exports = class extends base {
         return this.wrapper(() => this.connection.stat(filename.replace(/\//g, "\\")));
     }
     copy(source, target, streams, size, params) {
+        if (!streams.readStream) throw {message: "local copy not implemented for " + this.protocol, not_implemented: 1}
         return this.wrapper(() => this.connection.createWriteStream(target.replace(/\//g, "\\"))
             .then(stream => new Promise((resolve, reject) => {
                 streams.writeStream = stream;

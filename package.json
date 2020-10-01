@@ -11,7 +11,7 @@
   "license": "ISC",
   "dependencies": {
     "@marsaud/smb2": "^0.17.1",
-    "aws-sdk": "^2.762.0",
+    "aws-sdk": "^2.765.0",
     "chokidar": "^3.4.2",
     "fs-extra": "^9.0.1",
     "ftp": "^0.3.10",
@@ -20,7 +20,7 @@
     "is-stream": "^2.0.0",
     "mime-types": "^2.1.27",
     "moment": "^2.29.0",
-    "parallel_limit": "^1.0.6",
+    "parallel_limit": "^1.0.7",
     "ssh2": "^0.8.9"
   }
 }

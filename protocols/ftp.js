@@ -93,6 +93,7 @@ module.exports = class extends base {
         }));
     }
     copy(source, target, streams, size, params) {
+        if (!streams.readStream) throw {message: "local copy not implemented for " + this.protocol, not_implemented: 1}
         return this.wrapper(() => new Promise((resolve, reject) => {
             streams.readStream.on('error', err => reject(err));
             streams.passThrough.on('error', err => reject(err));
