@@ -5,6 +5,7 @@ const minPartSize = 5242880;
 let S3 = require('aws-sdk/clients/s3');
 let mime = require('mime-types');
 let base = require("../base");
+let qs = require("querystring");
 
 module.exports = class extends base {
     static parameters = ["polling", "polling_interval", "access_key", "secret", "region", "bucket"];
@@ -27,11 +28,14 @@ module.exports = class extends base {
         return this.queue.run(() => this.S3.headObject({Bucket: this.bucket, Key: filename}).promise()).then(data => ({
             size: data.ContentLength,
             mtime: data.LastModified,
+            storage_class: data.StorageClass,
             isDirectory: () => filename.endsWith('/')
         }));
     }
-    createReadStream(source) {
-        return this.queue.run(() => this.S3.getObject({Bucket: this.bucket, Key: source}).createReadStream());
+    createReadStream(source, options) {
+        let range;
+        if (options.start && options.end) range = `bytes=${options.start}-${options.end}`;
+        return this.queue.run(() => this.S3.getObject({Bucket: this.bucket, Key: source, Range: range}).createReadStream());
     }
     mkdir(dir) {
         return this.queue.run(() => this.S3.createBucket({Bucket: this.bucket}).promise())
@@ -46,7 +50,7 @@ module.exports = class extends base {
                 let partSize = params.partSize || 50 * 1024 * 1024;
                 while (size / partSize > 10000) partSize *= 2;
                 let options = params.options || {partSize: partSize, queueSize: params.concurrency || 8};
-                let result = this.S3.upload({Bucket: params.bucket || this.bucket, Key: target, Body: streams.passThrough, ContentType: mime.lookup(source)}, options, (err,data) => {
+                let result = this.S3.upload({Bucket: params.bucket || this.bucket, Key: target, Body: streams.passThrough, ContentType: mime.lookup(source), StorageClass: params.storage_class, Tagging: qs.stringify(params.tags)}, options, (err,data) => {
                     if (err) reject(err);
                     else resolve();
                 });
@@ -133,6 +137,9 @@ module.exports = class extends base {
                     })
                 return abort().then(() => throw err);
             })
+    }
+    tag(source, params) {
+        return this.queue.run(() => this.S3.putObjectTagging({Bucket: params.origin_bucket || this.bucket, Key: source, Tagging: {TagSet: params.tags}}).promise());
     }
     walk(dirname, ignored, token) {
         return this.queue.run(() => this.S3.listObjectsV2({Bucket: this.bucket, Prefix: this.constructor.normalize_path(dirname), ContinuationToken: token}).promise())

@@ -50,8 +50,8 @@ module.exports = class extends base {
     disconnect() {
         return this.queue.run(() => this.client.end());
     }
-    createReadStream(source) {
-        return this.wrapper(() => this.connection.createReadStream(source));
+    createReadStream(source, options) {
+        return this.wrapper(() => this.connection.createReadStream(source), options);
     }
     mkdir(dir) {
         if (!dir || dir === "/" || dir === ".") return;

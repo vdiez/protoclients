@@ -103,6 +103,7 @@ module.exports = class {
     symlink(source, target) {throw {message: "symlink method not implemented for " + this.protocol, not_implemented: 1}}
     move(source, target) {throw {message: "move method not implemented for " + this.protocol, not_implemented: 1}}
     remove(target) {throw {message: "remove method not implemented for " + this.protocol, not_implemented: 1}}
+    tag(target) {throw {message: "tag method not implemented for " + this.protocol, not_implemented: 1}}
     static normalize_path(dirname) {
         return path.posix.normalize(dirname.replace(/[\\\/]+/g, "/")).replace(/^(.+?)\/*?$/, "$1");  //remove trailing slashes unless it's root path
     }

@@ -24,8 +24,8 @@ module.exports = class extends base {
     disconnect() {
         return this.queue.run(() => this.connection.disconnect());
     }
-    createReadStream(source) {
-        return this.wrapper(() => this.connection.createReadStream(source.replace(/\//g, "\\")));
+    createReadStream(source, options) {
+        return this.wrapper(() => this.connection.createReadStream(source.replace(/\//g, "\\")), options);
     }
     mkdir(dir) {
         return this.wrapper(() => this.connection.mkdir(dir.replace(/\//g, "\\"))

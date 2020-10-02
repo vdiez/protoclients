@@ -37,8 +37,8 @@ module.exports = class extends base {
     destroy_watcher() {
         return this.watcher?.close();
     }
-    createReadStream(source) {
-        return this.queue.run(() => fs.createReadStream(source));
+    createReadStream(source, options) {
+        return this.queue.run(() => fs.createReadStream(source, options));
     }
     mkdir(dir) {
         return this.queue.run(() => fs.ensureDir(dir));
