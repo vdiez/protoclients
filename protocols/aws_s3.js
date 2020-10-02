@@ -135,7 +135,7 @@ module.exports = class extends base {
                         }
                         this.logger.error("Abort Multipart Copy error. No more retries. There may be pending parts in the bucket.", err);
                     })
-                return abort().then(() => throw err);
+                return abort().then(() => {throw err});
             })
     }
     tag(source, params) {
