@@ -12,6 +12,7 @@ module.exports = class extends base {
     static parameters = ["polling", "polling_interval", "access_key", "secret", "region", "bucket"];
     constructor(params, logger) {
         super(params, logger, "aws_s3");
+        this.on_file_restore = () => {};
     }
     static generate_id(params) {
         return JSON.stringify({protocol: 'aws_s3', accessKeyId: params.access_key, secretAccessKey: params.secret, region: params.region});
@@ -151,7 +152,10 @@ module.exports = class extends base {
     restore(source, params) {
         let key = path.posix.join(params.bucket || this.bucket, source);
         if (restores.hasOwnProperty(key)) return restores[key];
-        restores[key] = this.restore_object(source, params);
+        restores[key] = this.restore_object(source, params).then(stats => {
+            delete restores[key];
+            return stats;
+        });
 
         return restores[key]
     }
@@ -160,12 +164,16 @@ module.exports = class extends base {
             .then(data => {
                 if (data.StorageClass === 'GLACIER' || data.StorageClass === 'DEEP_ARCHIVE') {
                     let restore = data.Restore?.match(/ongoing-request="(.+?)"(?:, expiry-date="(.+?)")?/)
+                    //if (restore?.[1] === 'false') return data;
+                    if (!restore) {
+                        this.logger.info("Requesting restore of " + source);
+                        this.on_file_restore(params.origin_bucket || params.bucket || this.bucket, source);
+                        return this.queue.run(() => this.S3.restoreObject({Bucket: params.origin_bucket || params.bucket || this.bucket, Key: source, RestoreRequest: {Days: params.days || 1, GlacierJobParameters: {Tier: params.tier || "Expedited"}}}).promise())
+                            .then(() => new Promise(resolve => setTimeout(resolve, 10000)).then(() => this.restore_object(source, params)));
+                    }
                     if (restore?.[1] === 'true') return new Promise(resolve => setTimeout(resolve, 10000)).then(() => this.restore_object(source, params));
-                    if (restore?.[1] === 'false') return;
-                    this.logger.info("Requesting restore of " + source);
-                    return this.queue.run(() => this.S3.restoreObject({Bucket: params.origin_bucket || params.bucket || this.bucket, Key: source, RestoreRequest: {Days: params.days || 1, GlacierJobParameters: {Tier: params.tier || "Expedited"}}}).promise())
-                        .then(() => new Promise(resolve => setTimeout(resolve, 10000)).then(() => this.restore_object(source, params)));
                 }
+                return data;
             })
             .catch(err => {
                 this.logger.info("Error restoring object '" + source + "' on bucket '" + (params.bucket || this.bucket) + "'", err)
