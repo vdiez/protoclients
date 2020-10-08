@@ -15,8 +15,8 @@ module.exports = class extends base {
     createReadStream(source) {
         return this.queue.run(() => got.stream(source, {retry: 0, https: {rejectUnauthorized: false}}));
     }
-    read(filename, encoding = 'utf-8') {
-        return this.queue.run(() => got(filename, {retry: 0, https: {rejectUnauthorized: false}}).then(response => this.constructor.get_data(response.body, encoding)));
+    read(filename, params = {}) {
+        return this.queue.run(() => got(filename, {retry: 0, https: {rejectUnauthorized: false}}).then(response => this.constructor.get_data(response.body, params.encoding)));
     }
     stat(filename) {
         return this.queue.run(() => got.head(filename, {retry: 0, https: {rejectUnauthorized: false}})).then(response => {

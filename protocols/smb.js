@@ -14,15 +14,15 @@ module.exports = class extends base {
     }
     update_settings(params) {
         params.parallel_parsers = 1;
-        if (this.id() !== this.constructor.generate_id(params)) this.disconnect();
         super.update_settings(params);
+        if (this.id() !== this.constructor.generate_id(params)) this.disconnect();
     }
     connect(force) {
         if (this.connection && !force) return;
         this.connection = new Client({share: "\\\\" + this.params.host + "\\" + this.params.share, username: this.params.username, password: this.params.password, port: this.params.port, domain: this.params.domain, autoCloseTimeout: 0});
     }
     disconnect() {
-        return this.queue.run(() => this.connection.disconnect());
+        return this.queue.run(() => this.connection?.disconnect());
     }
     createReadStream(source, options) {
         return this.wrapper(() => this.connection.createReadStream(source.replace(/\//g, "\\")), options);
@@ -34,11 +34,11 @@ module.exports = class extends base {
                 throw err;
             }));
     }
-    read(filename, encoding = 'utf8') {
-        return this.wrapper(() => this.connection.readFile(filename.replace(/\//g, "\\"), {encoding: encoding}));
+    read(filename, params = {}) {
+        return this.wrapper(() => this.connection.readFile(filename.replace(/\//g, "\\"), {encoding: params.encoding}));
     }
-    write(target, contents = '', encoding = 'utf8') {
-        return this.wrapper(() => this.connection.writeFile(target, contents), {encoding: encoding});
+    write(target, contents = new Buffer(0), params = {}) {
+        return this.wrapper(() => this.connection.writeFile(target, contents), {encoding: params.encoding});
     }
     stat(filename) {
         return this.wrapper(() => this.connection.stat(filename.replace(/\//g, "\\")));

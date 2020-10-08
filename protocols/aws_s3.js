@@ -1,11 +1,12 @@
 const maxFileLength = 5368709120;
 const maxTrials = 3;
 const minPartSize = 5242880;
-
+let path = require('path');
 let S3 = require('aws-sdk/clients/s3');
 let mime = require('mime-types');
 let base = require("../base");
 let qs = require("querystring");
+let restores = {};
 
 module.exports = class extends base {
     static parameters = ["polling", "polling_interval", "access_key", "secret", "region", "bucket"];
@@ -21,31 +22,35 @@ module.exports = class extends base {
         if (this.id() !== this.constructor.generate_id(params)) this.S3 = new S3({accessKeyId: params.access_key, secretAccessKey: params.secret, region: params.region});
         super.update_settings(params);
     }
-    read(filename, encoding = 'utf-8') {
-        return this.queue.run(() => this.S3.getObject({Bucket: this.bucket, Key: filename}).promise().then(data => this.constructor.get_data(data.Body, encoding)));
+    read(filename, params = {}) {
+        return this.restore(filename, params).then(() => this.queue.run(() => this.S3.getObject({Bucket: params.bucket || this.bucket, Key: filename}).promise().then(data => this.constructor.get_data(data.Body, params.encoding))));
     }
-    stat(filename) {
-        return this.queue.run(() => this.S3.headObject({Bucket: this.bucket, Key: filename}).promise()).then(data => ({
+    stat(filename, params = {}) {
+        return this.queue.run(() => this.S3.headObject({Bucket: params.bucket || this.bucket, Key: filename}).promise()).then(data => ({
             size: data.ContentLength,
             mtime: data.LastModified,
             storage_class: data.StorageClass,
+            needs_restore: data.StorageClass === 'GLACIER' || data.StorageClass === 'DEEP_ARCHIVE',
             isDirectory: () => filename.endsWith('/')
         }));
     }
-    createReadStream(source, options) {
-        let range;
-        if (options.start && options.end) range = `bytes=${options.start}-${options.end}`;
-        return this.queue.run(() => this.S3.getObject({Bucket: this.bucket, Key: source, Range: range}).createReadStream());
+    createReadStream(source, params = {}) {
+        return this.restore(source, params)
+            .then(() => {
+                let range;
+                if (params.start && params.end) range = `bytes=${params.start}-${params.end}`;
+                return this.queue.run(() => this.S3.getObject({Bucket: params.bucket || this.bucket, Key: source, Range: range}).createReadStream())
+            });
     }
-    mkdir(dir) {
-        return this.queue.run(() => this.S3.createBucket({Bucket: this.bucket}).promise())
+    mkdir(dir, params = {}) {
+        return this.queue.run(() => this.S3.createBucket({Bucket: params.bucket || this.bucket}).promise())
     }
-    write(target, contents = '') {
-        return this.queue.run(() => this.S3.putObject({Bucket: this.bucket, Key: target, Body: contents}).promise())
+    write(target, contents = '', params = {}) {
+        return this.queue.run(() => this.S3.putObject({Bucket: params.bucket || this.bucket, Key: target, Body: contents}).promise())
     }
     copy(source, target, streams, size, params) {
+        if (!streams.readStream) return this.local_copy(source, target, size, params);
         return this.queue.run(() => {
-            if (!streams.readStream) return this.local_copy(source, target, size, params);
             return new Promise((resolve, reject) => {
                 let partSize = params.partSize || 50 * 1024 * 1024;
                 while (size / partSize > 10000) partSize *= 2;
@@ -81,65 +86,92 @@ module.exports = class extends base {
         return this.queue.run(() => this.S3.deleteObject({Bucket: this.bucket, Key: target}).promise());
     }
     move(source, target, size, params) {
-        return this.queue.run(() => this.local_copy(source, target, size, params)
-            .then(()=> this.S3.deleteObject({Bucket: (params.origin_bucket || this.bucket), Key: source}, ).promise()))
+        return this.local_copy(source, target, size, params).then(()=> this.queue.run(() => this.S3.deleteObject({Bucket: (params.origin_bucket || this.bucket), Key: source}, ).promise()))
     }
     local_copy(source, target, size, params) {
-        if (size > maxFileLength) return this.S3.copyObject({Bucket: params.bucket || this.bucket, Key: target, CopySource: encodeURI((params.origin_bucket || this.bucket) + "/" + source)}).promise();
-        let map = [], id;
-        return this.S3.createMultipartUpload({Bucket: this.bucket, Key: target, ContentType:  mime.lookup(source)}).promise()
-            .then(response => {
-                id = response.UploadId;
-                let part = 0, percentage = 0, loaded = 0;
-                let partSize = params.partSize || 50 * 1024 * 1024;
-                while (size / partSize >= 10000) partSize *= 2;
-                let concurrency = params.concurrency || 8;
-                let requests_queue = require("parallel_limit")(concurrency);
-                let requests = [];
-                for (let start = 0, end = 0; end === size; start += partSize) {
-                    end += partSize;
-                    if (size - end < minPartSize) end = size;
-                    part++;
-                    let upload = (trials = 0) => this.S3.uploadPartCopy({Bucket: params.bucket || this.bucket, Key: target, PartNumber: part, UploadId: id, CopySource: encodeURI((params.origin_bucket || this.bucket) + "/" + source), CopySourceRange: `bytes=${start}-${end - 1}`}).promise()
-                        .then(data => {
-                            map.push({ETag: data.CopyPartResult.ETag, PartNumber: part});
-                            if (params.publish) {
-                                loaded += end - start;
-                                let tmp = Math.round(loaded * 100 / size);
-                                if (percentage != tmp) {
-                                    percentage = tmp;
-                                    params.publish({current: loaded, total: size, percentage: percentage});
-                                }
-                            }
-                        })
-                        .catch(err => {
-                            this.logger.error("Error copying part: ", err);
-                            if (trials++ < maxTrials) return upload(trials);
-                            throw err;
-                        })
+        return this.restore(source, params).then(() => this.queue.run(() => {
+            if (size > maxFileLength) return this.S3.copyObject({Bucket: params.bucket || this.bucket, Key: target, CopySource: encodeURI((params.origin_bucket || this.bucket) + "/" + source)}).promise()
 
-                    requests.push(requests_queue.run(upload));
-                }
-                return Promise.all(requests);
-            })
-            .then(() => this.S3.completeMultipartUpload({Bucket: params.bucket || this.bucket, Key: target, MultipartUpload: {Parts: map}, UploadId: id}).promise())
-            .catch(err => {
-                this.logger.error("Multipart Copy error: ", err);
-                let abort = (trials = 0) => this.S3.abortMultipartUpload({Bucket: params.bucket || this.bucket, Key: target, UploadId: id}).promise()
-                    .then(() => this.S3.listParts({Bucket: params.bucket || this.bucket, Key: target, UploadId: id}).promise())
-                    .then((parts) => {if (parts.Parts.length > 0) throw {pending_parts: true};})
-                    .catch(err => {
-                        if (trials++ < maxTrials) {
-                            this.logger.error("Abort Multipart Copy error. Retrying... ", err);
-                            return new Promise(resolve => setTimeout(resolve, 5000)).then(() => abort(trials));
-                        }
-                        this.logger.error("Abort Multipart Copy error. No more retries. There may be pending parts in the bucket.", err);
-                    })
-                return abort().then(() => {throw err});
-            })
+            let map = [], id;
+            return this.S3.createMultipartUpload({Bucket: this.bucket, Key: target, ContentType:  mime.lookup(source)}).promise()
+                .then(response => {
+                    id = response.UploadId;
+                    let part = 0, percentage = 0, loaded = 0;
+                    let partSize = params.partSize || 50 * 1024 * 1024;
+                    while (size / partSize >= 10000) partSize *= 2;
+                    let concurrency = params.concurrency || 8;
+                    let requests_queue = require("parallel_limit")(concurrency);
+                    let requests = [];
+                    for (let start = 0, end = 0; end === size; start += partSize) {
+                        end += partSize;
+                        if (size - end < minPartSize) end = size;
+                        part++;
+                        let upload = (trials = 0) => this.S3.uploadPartCopy({Bucket: params.bucket || this.bucket, Key: target, PartNumber: part, UploadId: id, CopySource: encodeURI((params.origin_bucket || this.bucket) + "/" + source), CopySourceRange: `bytes=${start}-${end - 1}`}).promise()
+                            .then(data => {
+                                map.push({ETag: data.CopyPartResult.ETag, PartNumber: part});
+                                if (params.publish) {
+                                    loaded += end - start;
+                                    let tmp = Math.round(loaded * 100 / size);
+                                    if (percentage != tmp) {
+                                        percentage = tmp;
+                                        params.publish({current: loaded, total: size, percentage: percentage});
+                                    }
+                                }
+                            })
+                            .catch(err => {
+                                this.logger.error("Error copying part: ", err);
+                                if (trials++ < maxTrials) return upload(trials);
+                                throw err;
+                            })
+
+                        requests.push(requests_queue.run(upload));
+                    }
+                    return Promise.all(requests);
+                })
+                .then(() => this.S3.completeMultipartUpload({Bucket: params.bucket || this.bucket, Key: target, MultipartUpload: {Parts: map}, UploadId: id}).promise())
+                .catch(err => {
+                    this.logger.error("Multipart Copy error: ", err);
+                    let abort = (trials = 0) => this.S3.abortMultipartUpload({Bucket: params.bucket || this.bucket, Key: target, UploadId: id}).promise()
+                        .then(() => this.S3.listParts({Bucket: params.bucket || this.bucket, Key: target, UploadId: id}).promise())
+                        .then((parts) => {if (parts.Parts.length > 0) throw {pending_parts: true};})
+                        .catch(err => {
+                            if (trials++ < maxTrials) {
+                                this.logger.error("Abort Multipart Copy error. Retrying... ", err);
+                                return new Promise(resolve => setTimeout(resolve, 5000)).then(() => abort(trials));
+                            }
+                            this.logger.error("Abort Multipart Copy error. No more retries. There may be pending parts in the bucket.", err);
+                        })
+                    return abort().then(() => {throw err});
+                })
+        }));
     }
-    tag(source, params) {
-        return this.queue.run(() => this.S3.putObjectTagging({Bucket: params.origin_bucket || this.bucket, Key: source, Tagging: {TagSet: params.tags}}).promise());
+    tag(filename, params) {
+        return this.queue.run(() => this.S3.putObjectTagging({Bucket: params.bucket || this.bucket, Key: filename, Tagging: {TagSet: params.tags}}).promise());
+    }
+    restore(source, params) {
+        let key = path.posix.join(params.bucket || this.bucket, source);
+        if (restores.hasOwnProperty(key)) return restores[key];
+        restores[key] = this.restore_object(source, params);
+
+        return restores[key]
+    }
+    restore_object(source, params) {
+        return this.queue.run(() => this.S3.headObject({Bucket: params.origin_bucket || params.bucket || this.bucket, Key: source}).promise())
+            .then(data => {
+                if (data.StorageClass === 'GLACIER' || data.StorageClass === 'DEEP_ARCHIVE') {
+                    let restore = data.Restore?.match(/ongoing-request="(.+?)"(?:, expiry-date="(.+?)")?/)
+                    if (restore?.[1] === 'true') return new Promise(resolve => setTimeout(resolve, 10000)).then(() => this.restore_object(source, params));
+                    if (restore?.[1] === 'false') return;
+                    this.logger.info("Requesting restore of " + source);
+                    return this.queue.run(() => this.S3.restoreObject({Bucket: params.origin_bucket || params.bucket || this.bucket, Key: source, RestoreRequest: {Days: params.days || 1, GlacierJobParameters: {Tier: params.tier || "Expedited"}}}).promise())
+                        .then(() => new Promise(resolve => setTimeout(resolve, 10000)).then(() => this.restore_object(source, params)));
+                }
+            })
+            .catch(err => {
+                this.logger.info("Error restoring object '" + source + "' on bucket '" + (params.bucket || this.bucket) + "'", err)
+                if (err?.code === 'RestoreAlreadyInProgress' || err.code === 'GlacierExpeditedRetrievalNotAvailable') return new Promise(resolve => setTimeout(resolve, 10000)).then(() => this.restore_object(source, params));
+                throw err;
+            });
     }
     walk(dirname, ignored, token) {
         return this.queue.run(() => this.S3.listObjectsV2({Bucket: this.bucket, Prefix: this.constructor.normalize_path(dirname), ContinuationToken: token}).promise())
@@ -158,16 +190,16 @@ module.exports = class extends base {
             })
             .catch(err => {
                 this.logger.error("AWS S3 walk failed with dirname: ", dirname, err);
-                super.on_error(err);
+                this.on_error(err);
             });
     }
     static normalize_path(dirname, is_filename) {
         return dirname.replace(/[\\\/]+/g, "/").replace(/\/+$/, "").concat(is_filename ? "" : "/").replace(/^\/+/, "")
     }
-    filename(dirname, uri) {
+    static filename(dirname, uri) {
         return uri.slice(dirname.length);
     }
-    path(dirname, filename) {
-        return this.constructor.normalize_path(dirname) + filename;
+    static path(dirname, filename) {
+        return this.normalize_path(dirname) + filename;
     }
 }

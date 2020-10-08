@@ -14,8 +14,8 @@ module.exports = class extends base {
     }
     update_settings(params) {
         params.parallel_parsers = 1;
+        super.update_settings(params);
         if (this.id() !== this.constructor.generate_id(params)) this.disconnect();
-        super.update_settings();
     }
     connect(force) {
         if (this.connection && !force) return;
@@ -42,7 +42,7 @@ module.exports = class extends base {
         });
     }
     disconnect() {
-        return this.queue.run(() => this.connection.end());
+        return this.queue.run(() => this.connection?.end());
     }
     createReadStream(source) {
         return this.wrapper(() => new Promise((resolve, reject) => {
@@ -69,11 +69,11 @@ module.exports = class extends base {
             })
         }));
     }
-    read(filename, encoding = 'utf-8') {
+    read(filename, params = {}) {
         return this.wrapper(() => new Promise((resolve, reject) => {
             this.connection.get(filename, (err, stream) => {
                 if (err) reject(err);
-                else this.constructor.get_data(stream, encoding).then(data => resolve(data)).catch(err => reject(err));
+                else this.constructor.get_data(stream, params.encoding).then(data => resolve(data)).catch(err => reject(err));
             })
         }));
     }
@@ -84,7 +84,7 @@ module.exports = class extends base {
                 else return {size: 0, mtime: new Date(), isDirectory: () => true};
             });
     }
-    write(target, contents = '') {
+    write(target, contents = new Buffer(0)) {
         return this.wrapper(() => new Promise((resolve, reject) => {
             this.connection.put(contents, target, err => {
                 if (err) reject(err);

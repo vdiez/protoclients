@@ -14,8 +14,8 @@ module.exports = class extends base {
     }
     update_settings(params) {
         params.parallel_parsers = 1;
+        super.update_settings(params);
         if (this.id() !== this.constructor.generate_id(params)) this.disconnect();
-        super.update_settings();
     }
     connect(force) {
         if (this.connection && !force) return;
@@ -48,7 +48,7 @@ module.exports = class extends base {
         });
     }
     disconnect() {
-        return this.queue.run(() => this.client.end());
+        return this.queue.run(() => this.client?.end());
     }
     createReadStream(source, options) {
         return this.wrapper(() => this.connection.createReadStream(source), options);
@@ -88,9 +88,9 @@ module.exports = class extends base {
             });
         }));
     }
-    write(target, contents = '') {
+    write(target, contents = '', params = {}) {
         return this.wrapper(() => new Promise((resolve, reject) => {
-            this.connection.writeFile(target, contents, err => {
+            this.connection.writeFile(target, contents, params.encoding, err => {
                 if (err) reject(err);
                 else resolve();
             })

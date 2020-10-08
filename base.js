@@ -85,12 +85,6 @@ module.exports = class {
             });
     }
     destroy_watcher() {}
-    filename(dirname, uri) {
-        return uri.slice(dirname.length + 1);
-    }
-    path(dirname, filename) {
-        return path.posix.join(this.constructor.normalize_path(dirname), filename);
-    }
     connect() {}
     disconnect() {}
     createReadStream(source) {throw {message: "createReadStream method not implemented for " + this.protocol, not_implemented: 1}}
@@ -104,10 +98,16 @@ module.exports = class {
     move(source, target) {throw {message: "move method not implemented for " + this.protocol, not_implemented: 1}}
     remove(target) {throw {message: "remove method not implemented for " + this.protocol, not_implemented: 1}}
     tag(target) {throw {message: "tag method not implemented for " + this.protocol, not_implemented: 1}}
+    static filename(dirname, uri) {
+        return uri.slice(dirname.length + 1);
+    }
+    static path(dirname, filename) {
+        return path.posix.join(this.normalize_path(dirname), filename);
+    }
     static normalize_path(dirname) {
         return path.posix.normalize(dirname.replace(/[\\\/]+/g, "/")).replace(/^(.+?)\/*?$/, "$1");  //remove trailing slashes unless it's root path
     }
-    static get_data(data, encoding) {
+    static get_data(data, encoding = 'utf-8') {
         if (typeof data === "string") return data;
         return Promise.resolve()
             .then(() => {
