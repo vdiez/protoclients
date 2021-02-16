@@ -4,7 +4,14 @@ let base = require("../base");
 let publish = require('../default_publish');
 
 module.exports = class extends base {
-    static parameters = ["polling", "polling_interval", "host", "port", "username", "password"];
+    static parameters = {
+        host: {text: true},
+        port: {number: true},
+        username: {text: true},
+        password: {secret: true},
+        polling: {boolean: true},
+        polling_interval: {number: true}
+    };
     constructor(params, logger) {
         super(params, logger, "smb");
         this.connection = null;
@@ -22,7 +29,7 @@ module.exports = class extends base {
         this.connection = new Client({share: "\\\\" + this.params.host + "\\" + this.params.share, username: this.params.username, password: this.params.password, port: this.params.port, domain: this.params.domain, autoCloseTimeout: 0});
     }
     disconnect() {
-        return this.queue.run(() => this.connection?.disconnect());
+        return this.queue.run(() => this.connection?.disconnect()).then(() => this.logger.info("SMB connection closed with " + this.params.host));
     }
     createReadStream(source, options) {
         return this.wrapper(() => this.connection.createReadStream(source.replace(/\//g, "\\")), options);

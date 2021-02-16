@@ -28,6 +28,6 @@ module.exports = class extends base {
         });
     }
     static normalize_path(dirname, is_filename) {
-        return dirname.replace(/[\\\/]+/g, "/").replace(/\/+$/, "").concat(is_filename ? "" : "/").replace(/^\/+/, "")
+        return (dirname || "").replace(/[\\\/]+/g, "/").replace(/\/+$/, "").concat(is_filename ? "" : "/").replace(/^\/+/, "")
     }
 }

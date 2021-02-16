@@ -4,7 +4,11 @@ const is_stream = require('is-stream');
 let moment = require('moment');
 
 module.exports = class {
-    static parameters = ["parallel_parsers", "polling", "polling_interval"];
+    static parameters = {
+        parallel_parsers: {number: true},
+        polling: {boolean: true},
+        polling_interval: {number: true}
+    };
     constructor(params, logger, protocol) {
         this.logger = logger;
         this.protocol = protocol;
@@ -71,20 +75,18 @@ module.exports = class {
         this.on_watch_start();
         return this.init_watcher(this.constructor.normalize_path(dirname), ignored).then(() => this.on_watch_complete());
     }
-    stop_watch(kill) {
-        clearTimeout(this.timeout);
-        this.polling = false;
-        this.started = false;
-        this.on_watch_stop();
+    stop_watch() {
         return Promise.resolve()
-            .then(() => this.destroy_watcher())
             .then(() => {
+                clearTimeout(this.timeout);
+                this.polling = false;
+                this.started = false;
                 this.fileObjects = {};
                 this.timeout = null;
-                if (kill) return this.disconnect();
-            });
+                return this.disconnect();
+            })
+            .then(() => this.on_watch_stop());
     }
-    destroy_watcher() {}
     connect() {}
     disconnect() {}
     createReadStream(source) {throw {message: "createReadStream method not implemented for " + this.protocol, not_implemented: 1}}
@@ -105,7 +107,7 @@ module.exports = class {
         return path.posix.join(this.normalize_path(dirname), filename);
     }
     static normalize_path(dirname) {
-        return path.posix.normalize(dirname.replace(/[\\\/]+/g, "/")).replace(/^(.+?)\/*?$/, "$1");  //remove trailing slashes unless it's root path
+        return path.posix.normalize((dirname || "").replace(/[\\\/]+/g, "/")).replace(/^(.+?)\/*?$/, "$1");  //remove trailing slashes unless it's root path
     }
     static get_data(data, encoding = 'utf-8') {
         if (typeof data === "string") return data;

@@ -34,8 +34,8 @@ module.exports = class extends base {
                 this.watcher.on('ready', resolve);
             }))
     }
-    destroy_watcher() {
-        return this.watcher?.close();
+    disconnect() {
+        return this.queue.run(() => this.watcher?.close());
     }
     createReadStream(source, options) {
         return this.queue.run(() => fs.createReadStream(source, options));

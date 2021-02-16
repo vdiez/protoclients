@@ -4,7 +4,15 @@ let base = require("../base");
 let publish = require('../default_publish');
 
 module.exports = class extends base {
-    static parameters = ["polling", "polling_interval", "host", "port", "username", "password", "secure"];
+    static parameters = {
+        host: {text: true},
+        port: {number: true},
+        secure: {boolean: true},
+        username: {text: true},
+        password: {secret: true},
+        polling: {boolean: true},
+        polling_interval: {number: true}
+    };
     constructor(params, logger) {
         super(params, logger, "ftp");
         this.connection = null;
@@ -42,7 +50,7 @@ module.exports = class extends base {
         });
     }
     disconnect() {
-        return this.queue.run(() => this.connection?.end());
+        return this.queue.run(() => this.connection?.end()).then(() => this.logger.info("FTP connection closed with " + this.params.host));
     }
     createReadStream(source) {
         return this.wrapper(() => new Promise((resolve, reject) => {
