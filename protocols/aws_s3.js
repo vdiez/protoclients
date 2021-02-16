@@ -166,7 +166,6 @@ module.exports = class extends base {
                 if (data.needs_restore) {
                     let key = path.posix.join(params.origin_bucket || params.bucket || this.bucket, source);
                     if (data.restoring) {
-                        this.logger.info("Waiting for restore " + source);
                         if (!restores.hasOwnProperty(key)) restores[key] = new Promise(resolve => setTimeout(resolve, 10000))
                             .then(() => this.wait_restore_completed(source, params))
                             .then(stats => {
@@ -199,7 +198,7 @@ module.exports = class extends base {
             });
     }
     wait_restore_completed(source, params) {
-        this.logger.info("Requesting restore of " + source);
+        this.logger.debug("Waiting for restore " + source);
         return this.stat(source, params)
             .then(data => {
                 if (data.needs_restore && data.restoring) return new Promise(resolve => setTimeout(resolve, 10000)).then(() => this.wait_restore_completed(source, params));
@@ -208,6 +207,7 @@ module.exports = class extends base {
             });
     }
     restore_object(source, params) {
+        this.logger.info("Requesting restore of " + source);
         return this.queue.run(() => this.S3.restoreObject({Bucket: params.origin_bucket || params.bucket || this.bucket, Key: source, RestoreRequest: {Days: params.days || 1, GlacierJobParameters: {Tier: params.tier}}}).promise())
             .catch(err => {
                 this.logger.info("Error restoring object '" + source + "' on bucket '" + (params.origin_bucket || params.bucket || this.bucket) + "'", err)
