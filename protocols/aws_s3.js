@@ -10,6 +10,7 @@ let restores = {};
 
 module.exports = class extends base {
     static parameters = {
+        parallel: {number: true},
         access_key: {secret: true},
         secret: {secret: true},
         bucket: {text: true},
@@ -25,16 +26,22 @@ module.exports = class extends base {
         return JSON.stringify({protocol: 'aws_s3', accessKeyId: params.access_key, secretAccessKey: params.secret, region: params.region});
     }
     update_settings(params) {
-        params.parallel_parsers = 1;
         this.bucket = params.bucket;
         if (this.id() !== this.constructor.generate_id(params)) this.S3 = new S3({accessKeyId: params.access_key, secretAccessKey: params.secret, region: params.region});
         super.update_settings(params);
     }
     read(filename, params = {}) {
-        return this.restore(filename, params).then(() => this.queue.run(() => this.S3.getObject({Bucket: params.origin_bucket || params.bucket || this.bucket, Key: filename}).promise().then(data => this.constructor.get_data(data.Body, params.encoding))));
+        return this.restore(filename, params).then(() => this.queue.run(slot => {
+            this.logger.debug("AWS S3 (slot " + slot + ") read: ", filename);
+            return this.S3.getObject({Bucket: params.bucket || this.bucket, Key: filename}).promise().then(data => this.constructor.get_data(data.Body, params.encoding));
+        }));
     }
     stat(filename, params = {}) {
-        return this.queue.run(() => this.S3.headObject({Bucket: params.origin_bucket || params.bucket || this.bucket, Key: filename}).promise()).then(data => {
+        return this.queue.run(slot => {
+            this.logger.debug("AWS S3 (slot " + slot + ") stat: ", filename);
+            return this.S3.headObject({Bucket: params.bucket || this.bucket, Key: filename}).promise()
+        })
+        .then(data => {
             let restore = data.Restore?.match(/ongoing-request="(.+?)"(?:, expiry-date="(.+?)")?/)
             return {
                 size: data.ContentLength,
@@ -51,18 +58,33 @@ module.exports = class extends base {
             .then(() => {
                 let range;
                 if (params.start && params.end) range = `bytes=${params.start}-${params.end}`;
-                return this.queue.run(() => this.S3.getObject({Bucket: params.origin_bucket || params.bucket || this.bucket, Key: source, Range: range}).createReadStream())
+                return this.queue.run((slot, slot_control) => {
+                    this.logger.debug("AWS S3 (slot " + slot + ") create stream from: ", source);
+                    let stream = this.S3.getObject({Bucket: params.bucket || this.bucket, Key: source, Range: range}).createReadStream()
+                    slot_control.keep_busy = true;
+                    stream.on('error', slot_control.release_slot);
+                    stream.on('end', slot_control.release_slot);
+                    stream.on('close', slot_control.release_slot);
+                    return stream;
+                }, true);
             });
     }
     mkdir(dir, params = {}) {
-        return this.queue.run(() => this.S3.createBucket({Bucket: params.origin_bucket || params.bucket || this.bucket}).promise())
+        return this.queue.run(slot => {
+            this.logger.debug("AWS S3 (slot " + slot + ") mkdir/create bucket: ", params.bucket || this.bucket);
+            return this.S3.createBucket({Bucket: params.bucket || this.bucket}).promise()
+        })
     }
     write(target, contents = '', params = {}) {
-        return this.queue.run(() => this.S3.putObject({Bucket: params.origin_bucket || params.bucket || this.bucket, Key: target, Body: contents}).promise())
+        return this.queue.run(slot => {
+            this.logger.debug("AWS S3 (slot " + slot + ") upload to: ", target);
+            return this.S3.putObject({Bucket: params.bucket || this.bucket, Key: target, Body: contents}).promise()
+        })
     }
     copy(source, target, streams, size, params) {
         if (!streams.readStream) return this.local_copy(source, target, size, params);
-        return this.queue.run(() => {
+        return this.queue.run(slot => {
+            this.logger.debug("AWS S3 (slot " + slot + ") upload stream to: ", target);
             return new Promise((resolve, reject) => {
                 let partSize = params.partSize || 50 * 1024 * 1024;
                 while (size / partSize > 10000) partSize *= 2;
@@ -94,17 +116,24 @@ module.exports = class extends base {
             })
         })
     }
-    remove(target) {
-        return this.queue.run(() => this.S3.deleteObject({Bucket: this.bucket, Key: target}).promise());
+    remove(target, params) {
+        return this.queue.run(slot => {
+            this.logger.debug("AWS S3 (slot " + slot + ") remote: ", target);
+            this.S3.deleteObject({Bucket: params?.bucket || this.bucket, Key: target}).promise()
+        });
     }
     move(source, target, size, params) {
-        return this.local_copy(source, target, size, params).then(()=> this.queue.run(() => this.S3.deleteObject({Bucket: (params.origin_bucket || this.bucket), Key: source}, ).promise()))
+        return this.local_copy(source, target, size, params).then(()=> this.remove(source, params))
     }
     local_copy(source, target, size, params) {
-        return this.restore(source, params).then(() => this.queue.run(() => {
-            if (size > maxFileLength) return this.S3.copyObject({Bucket: params.bucket || this.bucket, Key: target, CopySource: encodeURI((params.origin_bucket || this.bucket) + "/" + source)}).promise()
+        return this.restore(source, params).then(() => this.queue.run(slot => {
+            if (size < maxFileLength) {
+                this.logger.debug("AWS S3 (slot " + slot + ") atomic local copy: ", source, target);
+                return this.S3.copyObject({Bucket: params.bucket || this.bucket, Key: target, CopySource: encodeURI((params.bucket || this.bucket) + "/" + source)}).promise()
+            }
 
             let map = [], id;
+            this.logger.debug("AWS S3 (slot " + slot + ") multipart local copy: ", source, target);
             return this.S3.createMultipartUpload({Bucket: this.bucket, Key: target, ContentType:  mime.lookup(source)}).promise()
                 .then(response => {
                     id = response.UploadId;
@@ -118,7 +147,7 @@ module.exports = class extends base {
                         end += partSize;
                         if (size - end < minPartSize) end = size;
                         part++;
-                        let upload = (trials = 0) => this.S3.uploadPartCopy({Bucket: params.bucket || this.bucket, Key: target, PartNumber: part, UploadId: id, CopySource: encodeURI((params.origin_bucket || this.bucket) + "/" + source), CopySourceRange: `bytes=${start}-${end - 1}`}).promise()
+                        let upload = (trials = 0) => this.S3.uploadPartCopy({Bucket: params.bucket || this.bucket, Key: target, PartNumber: part, UploadId: id, CopySource: encodeURI((params.bucket || this.bucket) + "/" + source), CopySourceRange: `bytes=${start}-${end - 1}`}).promise()
                             .then(data => {
                                 map.push({ETag: data.CopyPartResult.ETag, PartNumber: part});
                                 if (params.publish) {
@@ -158,13 +187,16 @@ module.exports = class extends base {
         }));
     }
     tag(filename, params) {
-        return this.queue.run(() => this.S3.putObjectTagging({Bucket: params.bucket || this.bucket, Key: filename, Tagging: {TagSet: params.tags}}).promise());
+        return this.queue.run(slot => {
+            this.logger.debug("AWS S3 (slot " + slot + ") tag: ", filename, params.tags);
+            return this.S3.putObjectTagging({Bucket: params.bucket || this.bucket, Key: filename, Tagging: {TagSet: params.tags}}).promise()
+        });
     }
     restore(source, params) {
         return this.stat(source, params)
             .then(data => {
                 if (data.needs_restore) {
-                    let key = path.posix.join(params.origin_bucket || params.bucket || this.bucket, source);
+                    let key = path.posix.join(params.bucket || this.bucket, source);
                     if (data.restoring) {
                         if (!restores.hasOwnProperty(key)) restores[key] = new Promise(resolve => setTimeout(resolve, 10000))
                             .then(() => this.wait_restore_completed(source, params))
@@ -193,24 +225,25 @@ module.exports = class extends base {
                 return data;
             })
             .catch(err => {
-                this.logger.info("Error restoring object '" + source + "' on bucket '" + (params.origin_bucket || params.bucket || this.bucket) + "'", err)
+                this.logger.error("Error restoring object '" + source + "' on bucket '" + (params.bucket || this.bucket) + "'", err)
                 throw err;
             });
     }
     wait_restore_completed(source, params) {
-        this.logger.debug("Waiting for restore " + source);
         return this.stat(source, params)
             .then(data => {
                 if (data.needs_restore && data.restoring) return new Promise(resolve => setTimeout(resolve, 10000)).then(() => this.wait_restore_completed(source, params));
-                this.on_file_restore(params.origin_bucket || params.bucket || this.bucket, source);
+                this.on_file_restore(params.bucket || this.bucket, source);
                 return data;
             });
     }
     restore_object(source, params) {
-        this.logger.info("Requesting restore of " + source);
-        return this.queue.run(() => this.S3.restoreObject({Bucket: params.origin_bucket || params.bucket || this.bucket, Key: source, RestoreRequest: {Days: params.days || 1, GlacierJobParameters: {Tier: params.tier}}}).promise())
+        return this.queue.run(slot => {
+            this.logger.debug("AWS S3 (slot " + slot + ") restore: ", source);
+            return this.S3.restoreObject({Bucket: params.bucket || this.bucket, Key: source, RestoreRequest: {Days: params.days || 1, GlacierJobParameters: {Tier: params.tier}}}).promise()
+        })
             .catch(err => {
-                this.logger.info("Error restoring object '" + source + "' on bucket '" + (params.origin_bucket || params.bucket || this.bucket) + "'", err)
+                this.logger.error("Error restoring object '" + source + "' on bucket '" + (params.bucket || this.bucket) + "'", err)
                 if (err?.code === 'RestoreAlreadyInProgress') return;
                 if (err?.code === 'GlacierExpeditedRetrievalNotAvailable') {
                     params.tier = "Standard";
@@ -220,7 +253,10 @@ module.exports = class extends base {
             });
     }
     walk(dirname, ignored, token) {
-        return this.queue.run(() => this.S3.listObjectsV2({Bucket: this.bucket, Prefix: this.constructor.normalize_path(dirname), ContinuationToken: token}).promise())
+        return this.queue.run(slot => {
+            this.logger.debug("AWS S3 (slot " + slot + ") list: ", dirname);
+            return this.S3.listObjectsV2({Bucket: this.bucket, Prefix: this.constructor.normalize_path(dirname), ContinuationToken: token}).promise();
+        })
             .then(data => {
                 let list = data.Contents || [];
                 for (let i = 0; i < list.length; i++) {
@@ -246,6 +282,7 @@ module.exports = class extends base {
         return (dirname || "").replace(/[\\\/]+/g, "/").replace(/\/+$/, "").concat(is_filename ? "" : "/").replace(/^\/+/, "")
     }
     static filename(dirname, uri) {
+        if (dirname === "." || dirname === "/" || dirname === "./" || dirname === "") return uri;
         return uri.slice(dirname.length);
     }
     static path(dirname, filename) {

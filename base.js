@@ -5,17 +5,20 @@ let moment = require('moment');
 
 module.exports = class {
     static parameters = {
-        parallel_parsers: {number: true},
+        parallel: {number: true},
         polling: {boolean: true},
         polling_interval: {number: true}
     };
+    static accept_ranges = true;
     constructor(params, logger, protocol) {
         this.logger = logger;
         this.protocol = protocol;
         this.params = {};
         this.fileObjects = {};
         this.timeout = null;
-        this.disconnect_timeout = null;
+        this.disconnect_timeout = [];
+        this.queue = require("parallel_limit")(params.parallel);
+        this.connections = new Array(params.parallel).fill(null);
         this.on_error = () => {};
         this.on_watch_complete = () => {};
         this.on_watch_start = () => {};
@@ -34,22 +37,27 @@ module.exports = class {
             clearTimeout(this.timeout);
             this.polling = false;
         }
-        this.queue = require("parallel_limit")(params.parallel_parsers);
+        this.queue.set_size(params.parallel);
     }
-    wrapper(f) {
-        return this.queue.run(() => Promise.resolve()
+    wrapper(f, control_release) {
+        return this.queue.run((slot, slot_control) => Promise.resolve()
             .then(() => {
-                clearTimeout(this.disconnect_timeout);
-                return this.connect();
+                clearTimeout(this.disconnect_timeout[slot]);
+                return this.connect(slot);
             })
-            .then(() => f())
+            .then(connection => f(connection, slot, slot_control))
             .then(result => {
-                this.disconnect_timeout = setTimeout(() => {
-                    this.disconnect();
-                }, 300000)
+                Promise.resolve()
+                    .then(() => {
+                        if (control_release && slot_control?.keep_busy) return slot_control.release_promise;
+                    })
+                    .then(() => {
+                        this.disconnect_timeout[slot] = setTimeout(() => {
+                            this.disconnect(slot);
+                        }, 300000)
+                    })
                 return result;
-            })
-        );
+            }), control_release);
     }
     walk(dirname, ignored) {}
     init_watcher(dirname, ignored) {
@@ -58,7 +66,10 @@ module.exports = class {
         return this.walk(dirname, ignored)
             .then(() => {
                 for (let filename in this.fileObjects) {
-                    if (this.fileObjects.hasOwnProperty(filename) && this.fileObjects[filename].last_seen !== this.now) this.on_file_removed(path);
+                    if (this.fileObjects.hasOwnProperty(filename) && this.fileObjects[filename].last_seen !== this.now) {
+                        this.on_file_removed(filename);
+                        this.logger.info(this.protocol.toUpperCase() + " walk removing: ", filename);
+                    }
                 }
                 if (this.polling) this.timeout = setTimeout(() => {
                     this.init_watcher(dirname, ignored);
@@ -83,7 +94,6 @@ module.exports = class {
                 this.started = false;
                 this.fileObjects = {};
                 this.timeout = null;
-                return this.disconnect();
             })
             .then(() => this.on_watch_stop());
     }
@@ -101,6 +111,7 @@ module.exports = class {
     remove(target) {throw {message: "remove method not implemented for " + this.protocol, not_implemented: 1}}
     tag(target) {throw {message: "tag method not implemented for " + this.protocol, not_implemented: 1}}
     static filename(dirname, uri) {
+        if (dirname === "." || dirname === "/" || dirname === "./" || dirname === "") return uri;
         return uri.slice(dirname.length + 1);
     }
     static path(dirname, filename) {

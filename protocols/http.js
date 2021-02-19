@@ -6,20 +6,32 @@ module.exports = class extends base {
     constructor(params, logger) {
         super(params, logger, "http");
     }
-    static generate_id(params) {
+    static generate_id() {
         return 'http';
     }
-    update_settings(params) {
-        super.update_settings(params);
-    }
     createReadStream(source) {
-        return this.queue.run(() => got.stream(source, {retry: 0, https: {rejectUnauthorized: false}}));
+        return this.queue.run((slot, slot_control) => {
+            this.logger.debug("HTTP (slot " + slot + ") create stream from: ", source);
+            let stream = got.stream(source, {retry: 0, https: {rejectUnauthorized: false}});
+            slot_control.keep_busy = true;
+            stream.on('error', slot_control.release_slot);
+            stream.on('end', slot_control.release_slot);
+            stream.on('close', slot_control.release_slot);
+            return stream;
+        }, true);
     }
     read(filename, params = {}) {
-        return this.queue.run(() => got(filename, {retry: 0, https: {rejectUnauthorized: false}}).then(response => this.constructor.get_data(response.body, params.encoding)));
+        return this.queue.run((slot, slot_control) => {
+            this.logger.debug("HTTP (slot " + slot + ") download from: ", filename);
+            return got(filename, {retry: 0, https: {rejectUnauthorized: false}}).then(response => this.constructor.get_data(response.body, params.encoding))
+        });
     }
     stat(filename) {
-        return this.queue.run(() => got.head(filename, {retry: 0, https: {rejectUnauthorized: false}})).then(response => {
+        return this.queue.run((slot, slot_control) => {
+            this.logger.debug("HTTP (slot " + slot + ") stat: ", filename);
+            return got.head(filename, {retry: 0, https: {rejectUnauthorized: false}});
+        })
+            .then(response => {
             let stats = {isDirectory: () => false};
             let headers = response.headers;
             if (headers && headers['content-length']) stats.size = parseInt(headers['content-length'], 10);
