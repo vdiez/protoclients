@@ -186,10 +186,10 @@ module.exports = class extends base {
                 })
         }));
     }
-    tag(filename, params) {
+    tag(filename, tags, params) {
         return this.queue.run(slot => {
-            this.logger.debug("AWS S3 (slot " + slot + ") tag: ", filename, params.tags);
-            return this.S3.putObjectTagging({Bucket: params.bucket || this.bucket, Key: filename, Tagging: {TagSet: params.tags}}).promise()
+            this.logger.debug("AWS S3 (slot " + slot + ") tag: ", filename, tags);
+            return this.S3.putObjectTagging({Bucket: params.bucket || this.bucket, Key: filename, Tagging: {TagSet: tags}}).promise()
         });
     }
     restore(source, params) {
