@@ -7,6 +7,8 @@ module.exports = class extends base {
     static parameters = {
         parallel: {number: true},
         host: {text: true},
+        share: {text: true},
+        domain: {text: true},
         port: {number: true},
         username: {text: true},
         password: {secret: true},
