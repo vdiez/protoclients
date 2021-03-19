@@ -55,17 +55,27 @@ module.exports = class extends base {
     }
     disconnect(slot) {
         if (!this.connections[slot]) return;
-        this.connections[slot].disconnect()
         this.clients[slot].end();
         this.logger.info("SSH (slot " + slot + ") connection closed with " + this.params.host);
     }
     createReadStream(source, options) {
         return this.wrapper((connection, slot, slot_control) => {
-            this.logger.debug("SSH (slot " + slot + ") create stream from: ", source);
+            this.logger.debug("SSH (slot " + slot + ") create read stream from: ", source);
             let stream = connection.createReadStream(source, options)
             slot_control.keep_busy = true;
             stream.on('error', slot_control.release_slot);
             stream.on('end', slot_control.release_slot);
+            stream.on('close', slot_control.release_slot);
+            return stream;
+        }, true);
+    }
+    createWriteStream(target, options) {
+        return this.wrapper((connection, slot, slot_control) => {
+            this.logger.debug("SSH (slot " + slot + ") create write stream to: ", target);
+            let stream = connection.createWriteStream(target, options)
+            slot_control.keep_busy = true;
+            stream.on('error', slot_control.release_slot);
+            stream.on('finish', slot_control.release_slot);
             stream.on('close', slot_control.release_slot);
             return stream;
         }, true);
@@ -167,7 +177,7 @@ module.exports = class extends base {
             });
         }));
     }
-    walk(dirname, ignored, pending_paths = []) {
+    walk({dirname, ignored, on_file, on_error, pending_paths = []}) {
         return this.wrapper((connection, slot) => new Promise((resolve, reject) => {
             this.logger.debug("SSH (slot " + slot + ") list: ", dirname);
             connection.readdir(dirname, (err, list) => {
@@ -180,20 +190,11 @@ module.exports = class extends base {
                 let filename = path.posix.join(dirname, file.filename);
                 if (filename.match(ignored)) return;
                 if (file.attrs.isDirectory()) pending_paths.push(filename);
-                else {
-                    if (!this.fileObjects[filename] || (this.fileObjects[filename] && file.attrs.size !== this.fileObjects[filename].size)) {
-                        this.logger.info("SSH walk adding: ", filename);
-                        this.on_file_added(filename, file.attrs);
-                    }
-                    this.fileObjects[filename] = {last_seen: this.now, size: file.attrs.size};
-                }
+                else on_file(filename, file.attrs);
             })
-            .catch(err => {
-                this.logger.error("SSH walk for '" + file + "' failed: ", err);
-                this.on_error(err);
-            }), Promise.resolve()))
+            .catch(on_error), Promise.resolve()))
             .then(() => {
-                if (pending_paths.length) return this.walk(pending_paths.shift(), ignored, pending_paths);
+                if (pending_paths.length) return this.walk({dirname: pending_paths.shift(), ignored, on_file, on_error, pending_paths});
             })
     }
 }

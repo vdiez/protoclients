@@ -35,13 +35,28 @@ module.exports = class extends base {
     }
     createReadStream(source, options) {
         return this.wrapper((connection, slot, slot_control) => new Promise((resolve, reject) => {
-            this.logger.debug("SMB (slot " + slot + ") create stream from: ", source);
+            this.logger.debug("SMB (slot " + slot + ") create read stream from: ", source);
             connection.createReadStream(source.replace(/\//g, "\\"), options, (err, stream) => {
                 if (err) reject(err);
                 else {
                     slot_control.keep_busy = true;
                     stream.on('error', slot_control.release_slot);
                     stream.on('end', slot_control.release_slot);
+                    stream.on('close', slot_control.release_slot);
+                    resolve(stream);
+                }
+            })
+        }), true);
+    }
+    createWriteStream(target, options) {
+        return this.wrapper((connection, slot, slot_control) => new Promise((resolve, reject) => {
+            this.logger.debug("SMB (slot " + slot + ") create write stream to: ", target);
+            connection.createWriteStream(target.replace(/\//g, "\\"), options, (err, stream) => {
+                if (err) reject(err);
+                else {
+                    slot_control.keep_busy = true;
+                    stream.on('error', slot_control.release_slot);
+                    stream.on('finish', slot_control.release_slot);
                     stream.on('close', slot_control.release_slot);
                     resolve(stream);
                 }
@@ -118,7 +133,7 @@ module.exports = class extends base {
             })
         }));
     }
-    walk(dirname, ignored, pending_paths = []) {
+    walk({dirname, ignored, on_file, on_error, pending_paths = []}) {
         return this.wrapper((connection, slot) => new Promise((resolve, reject) => {
             this.logger.debug("SMB (slot " + slot + ") list: ", dirname);
             connection.readdir(dirname.replace(/\//g, "\\"), {stats: true}, (err, list) => {
@@ -131,20 +146,11 @@ module.exports = class extends base {
                 let filename = path.posix.join(dirname, file.name);
                 if (filename.match(ignored)) return;
                 if (file.isDirectory()) pending_paths.push(filename);
-                {
-                    if (!this.fileObjects[filename] || (this.fileObjects[filename] && file.size !== this.fileObjects[filename].size)) {
-                        this.logger.info("SMB walk adding: ", filename);
-                        this.on_file_added(filename, {size: file.size, mtime: file.mtime, isDirectory: () => false});
-                    }
-                    this.fileObjects[filename] = {last_seen: this.now, size: file.size};
-                }
+                else on_file(filename, {size: file.size, mtime: file.mtime, isDirectory: () => false});
             })
-            .catch(err => {
-                this.logger.error("SMB walk for '" + file + "' failed: ", err);
-                this.on_error(err);
-            }), Promise.resolve()))
+            .catch(on_error), Promise.resolve()))
             .then(() => {
-                if (pending_paths.length) return this.walk(pending_paths.shift(), ignored, pending_paths);
+                if (pending_paths.length) return this.walk({dirname: pending_paths.shift(), ignored, on_file, on_error, pending_paths});
             })
     }
 }

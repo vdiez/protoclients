@@ -53,7 +53,7 @@ module.exports = class extends base {
     }
     createReadStream(source) {
         return this.wrapper((connection, slot, slot_control) => new Promise((resolve, reject) => {
-            this.logger.debug("FTP (slot " + slot + ") create stream from: ", source);
+            this.logger.debug("FTP (slot " + slot + ") create read stream from: ", source);
             connection.get(source, (err, stream) => {
                 if (err) reject(err);
                 else {
@@ -64,6 +64,18 @@ module.exports = class extends base {
                     resolve(stream);
                 }
             });
+        }), true);
+    }
+    createWriteStream(target) {
+        return this.wrapper((connection, slot, slot_control) => new Promise((resolve, reject) => {
+            this.logger.debug("FTP (slot " + slot + ") create write stream to: ", target);
+            slot_control.keep_busy = true;
+            let stream = {passThrough: new (require('stream')).PassThrough()};
+            connection.put(stream, target, err => {
+                if (err) reject(err);
+                slot_control.release_slot();
+            });
+            resolve(stream);
         }), true);
     }
     mkdir(dir) {
@@ -142,27 +154,18 @@ module.exports = class extends base {
             });
         }));
     }
-    walk(dirname, ignored, pending_paths = []) {
+    walk({dirname, ignored, on_file, on_error, pending_paths = []}) {
         return this.list(dirname)
             .then(list => list.reduce((p, file) => p
                 .then(() => {
                     let filename = path.posix.join(dirname, file.name);
                     if (filename.match(ignored)) return;
                     if (file.type === 'd') pending_paths.push(filename);
-                    else {
-                        if (!this.fileObjects[filename] || (this.fileObjects[filename] && file.size !== this.fileObjects[filename].size)) {
-                            this.logger.info("FTP walk adding: ", filename);
-                            this.on_file_added(filename, {size: file.size, mtime: file.date, isDirectory: () => false})
-                        }
-                        this.fileObjects[filename] = {last_seen: this.now, size: file.size};
-                    }
+                    else on_file(filename, {size: file.size, mtime: file.date, isDirectory: () => false})
                 })
-                .catch(err => {
-                    this.logger.error("FTP walk for '" + file + "' failed: ", err);
-                    this.on_error(err);
-                }), Promise.resolve()))
+                .catch(on_error), Promise.resolve()))
             .then(() => {
-                if (pending_paths.length) return this.walk(pending_paths.shift(), ignored, pending_paths);
+                if (pending_paths.length) return this.walk({dirname: pending_paths.shift(), ignored, on_file, on_error, pending_paths});
             })
     }
 }

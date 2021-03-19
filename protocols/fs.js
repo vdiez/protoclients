@@ -1,5 +1,4 @@
 let base = require("../base");
-let chokidar = require('chokidar');
 let fs = require('fs-extra');
 let publish = require('../default_publish');
 
@@ -10,43 +9,24 @@ module.exports = class extends base {
     static generate_id(params) {
         return 'fs';
     }
-    update_settings(params) {
-        super.update_settings(params);
-        this.options = {};
-        if (params.polling) this.options.usePolling = true;
-        if (params.polling_interval) {
-            this.options.interval = params.polling_interval;
-            this.options.binaryInterval = params.polling_interval;
-        }
-    }
-    init_watcher(dirname, ignored) {
-        return fs.mkdirp(dirname, {mode: 0o2775})
-            .then(() => new Promise((resolve, reject) => {
-                this.watcher = chokidar.watch(dirname, {ignored: ignored, ignorePermissionErrors: true, ...this.options});
-                this.watcher.on('add', (path, stats) => this.on_file_added(this.constructor.normalize_path(path), stats));
-                this.watcher.on('change', (path, stats) => this.on_file_added(this.constructor.normalize_path(path), stats));
-                this.watcher.on('unlink', (path) => this.on_file_removed(path));
-                this.watcher.on('error', err => {
-                    this.logger.error("Walk failed with dirname: ", dirname, err);
-                    this.on_error(err);
-                    reject();
-                });
-                this.watcher.on('ready', resolve);
-            }))
-    }
-    stop_watch() {
-        return this.queue.run(slot => {
-            this.logger.info("FS (slot " + slot + ") closing watcher");
-            return this.watcher?.close();
-        }).then(() => super.stop_watch());
-    }
     createReadStream(source, options) {
         return this.queue.run((slot, slot_control) => {
-            this.logger.debug("FS (slot " + slot + ") create stream from: ", source);
+            this.logger.debug("FS (slot " + slot + ") create read stream from: ", source);
             let stream = fs.createReadStream(source, options);
             slot_control.keep_busy = true;
             stream.on('error', slot_control.release_slot);
             stream.on('end', slot_control.release_slot);
+            stream.on('close', slot_control.release_slot);
+            return stream;
+        }, true);
+    }
+    createWriteStream(target, options) {
+        return this.queue.run((slot, slot_control) => {
+            this.logger.debug("FS (slot " + slot + ") create write stream to: ", target);
+            let stream = fs.createWriteStream(target, options);
+            slot_control.keep_busy = true;
+            stream.on('error', slot_control.release_slot);
+            stream.on('finish', slot_control.release_slot);
             stream.on('close', slot_control.release_slot);
             return stream;
         }, true);

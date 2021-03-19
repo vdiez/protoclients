@@ -2,6 +2,7 @@ let path = require('path');
 const get_stream = require('get-stream');
 const is_stream = require('is-stream');
 let moment = require('moment');
+let watcher = require('./watcher');
 
 module.exports = class {
     static parameters = {
@@ -14,17 +15,9 @@ module.exports = class {
         this.logger = logger;
         this.protocol = protocol;
         this.params = {};
-        this.fileObjects = {};
-        this.timeout = null;
         this.disconnect_timeout = [];
         this.queue = require("parallel_limit")(params.parallel);
         this.connections = new Array(params.parallel).fill(null);
-        this.on_error = () => {};
-        this.on_watch_complete = () => {};
-        this.on_watch_start = () => {};
-        this.on_watch_stop = () => {};
-        this.on_file_added = () => {};
-        this.on_file_removed = () => {};
         this.update_settings(params);
     }
     id() {
@@ -32,11 +25,6 @@ module.exports = class {
     }
     update_settings(params) {
         this.params = params;
-        if (params.polling && params.polling_interval) this.polling = params.polling_interval;
-        else {
-            clearTimeout(this.timeout);
-            this.polling = false;
-        }
         this.queue.set_size(params.parallel);
     }
     wrapper(f, control_release) {
@@ -59,47 +47,13 @@ module.exports = class {
                 return result;
             }), control_release);
     }
-    walk(dirname, ignored) {}
-    init_watcher(dirname, ignored) {
-        if (!this.started) return;
-        this.now = moment().format('YYYYMMDDHHmmssSSS');
-        return this.walk(dirname, ignored)
-            .then(() => {
-                for (let filename in this.fileObjects) {
-                    if (this.fileObjects.hasOwnProperty(filename) && this.fileObjects[filename].last_seen !== this.now) {
-                        this.on_file_removed(filename);
-                        this.logger.info(this.protocol.toUpperCase() + " walk removing: ", filename);
-                    }
-                }
-                if (this.polling) this.timeout = setTimeout(() => {
-                    this.init_watcher(dirname, ignored);
-                }, this.polling);
-            })
-            .catch(err => {
-                this.logger.error("Walk failed with dirname: ", dirname, err);
-                this.on_error(err);
-            })
-    }
-    start_watch(dirname, ignored = /(^|[\/\\])\../) {//(^|[\/\\])\.+([^\/\\\.]|$)/
-        if (this.started) return;
-        this.started = true;
-        this.on_watch_start();
-        return this.init_watcher(this.constructor.normalize_path(dirname), ignored).then(() => this.on_watch_complete());
-    }
-    stop_watch() {
-        return Promise.resolve()
-            .then(() => {
-                clearTimeout(this.timeout);
-                this.polling = false;
-                this.started = false;
-                this.fileObjects = {};
-                this.timeout = null;
-            })
-            .then(() => this.on_watch_stop());
+    create_watcher(params) {
+        return new watcher(params, this.logger, this);
     }
     connect() {}
     disconnect() {}
     createReadStream(source) {throw {message: "createReadStream method not implemented for " + this.protocol, not_implemented: 1}}
+    createWriteStream(target) {throw {message: "createWriteStream method not implemented for " + this.protocol, not_implemented: 1}}
     mkdir(dir) {throw {message: "mkdir method not implemented for " + this.protocol, not_implemented: 1}}
     stat(target) {throw {message: "stat method not implemented for " + this.protocol, not_implemented: 1}}
     read(source) {throw {message: "read method not implemented for " + this.protocol, not_implemented: 1}}
@@ -110,6 +64,7 @@ module.exports = class {
     move(source, target) {throw {message: "move method not implemented for " + this.protocol, not_implemented: 1}}
     remove(target) {throw {message: "remove method not implemented for " + this.protocol, not_implemented: 1}}
     tag(target) {throw {message: "tag method not implemented for " + this.protocol, not_implemented: 1}}
+    walk(params) {throw {message: "walk method not implemented for " + this.protocol, not_implemented: 1}}
     static filename(dirname, uri) {
         if (dirname === "." || dirname === "/" || dirname === "./" || dirname === "") return uri;
         return uri.slice(dirname.length + 1);
