@@ -60,7 +60,7 @@ module.exports = class {
                     this.watcher = chokidar.watch(this.dirname, {ignored: this.ignored, ignorePermissionErrors: true, ...this.options});
                     this.watcher.on('add', (path, stats) => this.on_file_added(this.connection.constructor.normalize_path(path), stats));
                     this.watcher.on('change', (path, stats) => this.on_file_added(this.connection.constructor.normalize_path(path), stats));
-                    this.watcher.on('unlink', (path) => this.on_file_removed(path));
+                    this.watcher.on('unlink', (path) => this.on_file_removed(this.connection.constructor.normalize_path(path)));
                     this.watcher.on('error', err => {
                         this.logger.error("Walk failed with dirname: ", this.dirname, err);
                         this.on_error(err);
