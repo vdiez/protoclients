@@ -109,6 +109,7 @@ module.exports = class extends base {
     stat(file) {
         return this.list(file)
             .then(list => {
+                if (!list || !list.length) return null;
                 if (list.length === 1 && list[0]?.name === file) return {size: list[0].size, mtime: list[0].date, isDirectory: () => false};
                 else return {size: 0, mtime: new Date(), isDirectory: () => true};
             });
