@@ -84,7 +84,7 @@ module.exports = class extends base {
     mkdir(dir, params = {}) {
         return this.queue.run(slot => {
             this.logger.debug("AWS S3 (slot " + slot + ") mkdir/create bucket: ", params.bucket || this.bucket);
-            return this.S3.createBucket({Bucket: params.bucket || this.bucket}).promise()
+            return this.S3.createBucket({Bucket: params.bucket || this.bucket}).promise().catch(err => this.logger.error("Could not create bucket: ", err))
         })
     }
     write(target, contents = '', params = {}) {
