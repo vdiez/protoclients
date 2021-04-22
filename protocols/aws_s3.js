@@ -130,7 +130,7 @@ module.exports = class extends base {
     }
     remove(target, params) {
         return this.queue.run(slot => {
-            this.logger.debug("AWS S3 (slot " + slot + ") remote: ", target);
+            this.logger.debug("AWS S3 (slot " + slot + ") remove: ", target);
             this.S3.deleteObject({Bucket: params?.bucket || this.bucket, Key: target}).promise()
         });
     }
@@ -149,19 +149,18 @@ module.exports = class extends base {
             return this.S3.createMultipartUpload({Bucket: this.bucket, Key: target, ContentType:  mime.lookup(source)}).promise()
                 .then(response => {
                     id = response.UploadId;
-                    let part = 0, percentage = 0, loaded = 0;
+                    let percentage = 0, loaded = 0;
                     let partSize = params.partSize || 50 * 1024 * 1024;
                     while (size / partSize >= 10000) partSize *= 2;
                     let concurrency = params.concurrency || 8;
                     let requests_queue = require("parallel_limit")(concurrency);
                     let requests = [];
-                    for (let start = 0, end = 0; end === size; start += partSize) {
+                    for (let start = 0, end = 0, part = 1; end < size; start += partSize, part++) {
                         end += partSize;
                         if (size - end < minPartSize) end = size;
-                        part++;
                         let upload = (trials = 0) => this.S3.uploadPartCopy({Bucket: params.bucket || this.bucket, Key: target, PartNumber: part, UploadId: id, CopySource: encodeURI((params.source_bucket || params.bucket || this.bucket) + "/" + source), CopySourceRange: `bytes=${start}-${end - 1}`}).promise()
                             .then(data => {
-                                map.push({ETag: data.CopyPartResult.ETag, PartNumber: part});
+                                map[part - 1] = {ETag: data.CopyPartResult.ETag, PartNumber: part};
                                 if (params.publish) {
                                     loaded += end - start;
                                     let tmp = Math.round(loaded * 100 / size);
@@ -187,12 +186,13 @@ module.exports = class extends base {
                     let abort = (trials = 0) => this.S3.abortMultipartUpload({Bucket: params.bucket || this.bucket, Key: target, UploadId: id}).promise()
                         .then(() => this.S3.listParts({Bucket: params.bucket || this.bucket, Key: target, UploadId: id}).promise())
                         .then((parts) => {if (parts.Parts.length > 0) throw {pending_parts: true};})
-                        .catch(err => {
+                        .catch(abort_err => {
+                            if (abort_err?.code === "NoSuchUpload") return;
                             if (trials++ < maxTrials) {
-                                this.logger.error("Abort Multipart Copy error. Retrying... ", err);
+                                this.logger.error("Abort Multipart Copy error. Retrying... ", abort_err);
                                 return new Promise(resolve => setTimeout(resolve, 5000)).then(() => abort(trials));
                             }
-                            this.logger.error("Abort Multipart Copy error. No more retries. There may be pending parts in the bucket.", err);
+                            this.logger.error("Abort Multipart Copy error. No more retries. There may be pending parts in the bucket.", abort_err);
                         })
                     return abort().then(() => {throw err});
                 })
@@ -240,6 +240,7 @@ module.exports = class extends base {
         return this.stat(source, params)
             .then(data => {
                 if (data.needs_restore && data.restoring) return new Promise(resolve => setTimeout(resolve, 10000)).then(() => this.wait_restore_completed(source, params));
+                return data;
             });
     }
     restore_object(source, params) {

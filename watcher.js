@@ -53,7 +53,7 @@ module.exports = class {
         }
     }
 
-    init_watcher() {
+    loop_watcher() {
         if (this.connection.protocol === "fs") {
             return fs.mkdirp(this.dirname, {mode: 0o2775})
                 .then(() => new Promise((resolve, reject) => {
@@ -91,11 +91,11 @@ module.exports = class {
                 for (let filename in this.fileObjects) {
                     if (this.fileObjects.hasOwnProperty(filename) && this.fileObjects[filename].last_seen !== this.now) {
                         this.on_file_removed(filename);
-                        this.logger.info(this.protocol.toUpperCase() + " walk removing: ", filename);
+                        this.logger.info(this.connection.protocol.toUpperCase() + " walk removing: ", filename);
                     }
                 }
                 if (this.polling) this.timeout = setTimeout(() => {
-                    this.init_watcher();
+                    this.loop_watcher();
                 }, this.polling);
             })
             .catch(err => {
@@ -108,7 +108,7 @@ module.exports = class {
         if (this.started) return;
         this.started = true;
         this.on_watch_start();
-        return this.init_watcher().then(() => this.on_watch_complete());
+        return this.loop_watcher().then(() => this.on_watch_complete());
     }
 
     stop_watch() {

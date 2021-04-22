@@ -1,7 +1,6 @@
 let path = require('path');
 const get_stream = require('get-stream');
 const is_stream = require('is-stream');
-let moment = require('moment');
 let watcher = require('./watcher');
 
 module.exports = class {
