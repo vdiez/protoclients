@@ -1,6 +1,7 @@
 let base = require("../base");
 let fs = require('fs-extra');
 let publish = require('../default_publish');
+let path = require("path");
 
 module.exports = class extends base {
     constructor(params, logger) {
@@ -91,6 +92,17 @@ module.exports = class extends base {
         return this.queue.run(slot => {
             this.logger.debug("FS (slot " + slot + ") stat: ", filename);
             return fs.stat(filename);
+        });
+    }
+    list(dirname) {
+        return this.queue.run(slot => {
+            this.logger.debug("FS (slot " + slot + ") readdir: ", dirname);
+            return fs.readdir(dirname)
+            .then(files => {
+                let stats = [];
+                return files.reduce((p, file) => p.then(() => fs.stat(path.posix.join(dirname, file)).then(stat => {stat.name = file; stats.push(stat)}).catch(() => {})), Promise.resolve())
+                    .then(() => stats)
+            })
         });
     }
     static normalize_path(uri) {

@@ -88,7 +88,7 @@ module.exports = class extends base {
             });
         }));
     }
-    list(dirname) {
+    list_uri(dirname) {
         return this.wrapper((connection, slot) => new Promise((resolve, reject) => {
             this.logger.debug("FTP (slot " + slot + ") list/stat: ", dirname);
             connection.list(dirname, (err, list) => {
@@ -107,7 +107,7 @@ module.exports = class extends base {
         }));
     }
     stat(file) {
-        return this.list(file)
+        return this.list_uri(file)
             .then(list => {
                 if (!list || !list.length) return null;
                 if (list.length === 1 && list[0]?.name === file) return {size: list[0].size, mtime: list[0].date, isDirectory: () => false};
@@ -155,8 +155,24 @@ module.exports = class extends base {
             });
         }));
     }
+    list(dirname) {
+        return this.wrapper((connection, slot) => new Promise((resolve, reject) => {
+            this.logger.debug("FTP (slot " + slot + ") list/stat: ", dirname);
+            connection.list(dirname, (err, list) => {
+                if (err) reject(err);
+                else resolve(list);
+            })
+        }))
+            .then(list => {
+                for (let i = 0; i < list.length; i++) {
+                    list[i].isDirectory = () => list[i].type === "d";
+                    list[i].mtime = list[i].date;
+                }
+                return list;
+            });
+    }
     walk({dirname, ignored, on_file, on_error, pending_paths = []}) {
-        return this.list(dirname)
+        return this.list_uri(dirname)
             .then(list => list.reduce((p, file) => p
                 .then(() => {
                     let filename = path.posix.join(dirname, file.name);

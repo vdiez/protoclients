@@ -37,6 +37,26 @@ module.exports = class extends base {
         }));
     }
     stat(filename, params = {}) {
+        if (filename === "." || filename === "/" || filename === "./" || filename === "") return Promise.resolve({
+            name: '',
+            size: 0,
+            mtime: new Date(),
+            isDirectory: () => true
+        })
+        if (filename.endsWith('/')) {
+            return this.queue.run(slot => {
+                this.logger.debug("AWS S3 (slot " + slot + ") stat: ", filename);
+                return this.S3.listObjectsV2({Bucket: params.bucket || this.bucket, Prefix: filename}).promise();
+            })
+                .then(data => {
+                    if (data.Contents?.length) return {
+                        name: filename,
+                        size: 0,
+                        mtime: new Date(),
+                        isDirectory: () => true
+                    }
+                });
+        }
         return this.queue.run(slot => {
             this.logger.debug("AWS S3 (slot " + slot + ") stat: ", filename);
             return this.S3.headObject({Bucket: params.bucket || this.bucket, Key: filename}).promise()
@@ -49,7 +69,7 @@ module.exports = class extends base {
                 storage_class: data.StorageClass,
                 needs_restore: (data.StorageClass === 'GLACIER' || data.StorageClass === 'DEEP_ARCHIVE') && (!restore || restore?.[1] === 'true'),
                 restoring: restore?.[1] === 'true',
-                isDirectory: () => filename.endsWith('/')
+                isDirectory: () => false
             }
         });
     }
@@ -84,7 +104,9 @@ module.exports = class extends base {
     mkdir(dir, params = {}) {
         return this.queue.run(slot => {
             this.logger.debug("AWS S3 (slot " + slot + ") mkdir/create bucket: ", params.bucket || this.bucket);
-            return this.S3.createBucket({Bucket: params.bucket || this.bucket}).promise().catch(err => this.logger.error("Could not create bucket: ", err))
+            return this.S3.createBucket({Bucket: params.bucket || this.bucket}).promise()
+                .then(() => this.S3.putObject({Bucket: params.bucket || this.bucket, Key: dir + '/'}).promise())
+                .catch(err => this.logger.error("Could not create bucket: ", err))
         })
     }
     write(target, contents = '', params = {}) {
@@ -258,6 +280,31 @@ module.exports = class extends base {
                 throw err;
             });
     }
+    list(dirname, {bucket}, token, results = [], directories = []) {
+        dirname = this.constructor.normalize_path(dirname);
+        return this.queue.run(slot => {
+            this.logger.debug("AWS S3 (slot " + slot + ") list: ", dirname);
+            return this.S3.listObjectsV2({Bucket: bucket || this.bucket, Prefix: dirname, ContinuationToken: token}).promise();
+        })
+            .then(data => {
+                let list = data.Contents || [];
+                for (let i = 0; i < list.length; i++) {
+                    let {Key, Size, LastModified} = list[i];
+                    Key = this.constructor.filename(dirname, Key);
+                    let slash_pos = Key.indexOf('/');
+                    if (slash_pos < 0) results.push({name: Key, size: Size, mtime: LastModified, isDirectory: () => false});
+                    else {
+                        Key = Key.slice(0, slash_pos)
+                        if (!directories.includes(Key)) {
+                            directories.push(Key)
+                            results.push({name: Key, size: Size, mtime: LastModified, isDirectory: () => true});
+                        }
+                    }
+                }
+                if (data.IsTruncated) return this.list(dirname, {bucket}, data.NextContinuationToken, results, directories);
+                return results;
+            });
+    }
     walk({dirname, bucket, ignored, on_file, on_error, token}) {
         return this.queue.run(slot => {
             this.logger.debug("AWS S3 (slot " + slot + ") list: ", dirname);
@@ -266,9 +313,9 @@ module.exports = class extends base {
             .then(data => {
                 let list = data.Contents || [];
                 for (let i = 0; i < list.length; i++) {
-                    let {Key, Size} = list[i];
+                    let {Key, Size, LastModified} = list[i];
                     if (Key.match(ignored)) continue;
-                    if (!Key.endsWith('/')) on_file(Key, {size: Size, mtime: list[i].LastModified, isDirectory: () => false});
+                    if (!Key.endsWith('/')) on_file(Key, {size: Size, mtime: LastModified, isDirectory: () => false});
                 }
 
                 if (data.IsTruncated) return this.walk({dirname, bucket, ignored, on_file, on_error, token: data.NextContinuationToken});
@@ -276,6 +323,7 @@ module.exports = class extends base {
             .catch(on_error);
     }
     static normalize_path(dirname, is_filename) {
+        if (dirname === "." || dirname === "/" || dirname === "./" || dirname === "") return '';
         return (dirname || "").replace(/[\\\/]+/g, "/").replace(/\/+$/, "").concat(is_filename ? "" : "/").replace(/^\/+/, "")
     }
     static filename(dirname, uri) {

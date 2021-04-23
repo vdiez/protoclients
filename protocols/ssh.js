@@ -177,6 +177,23 @@ module.exports = class extends base {
             });
         }));
     }
+    list(dirname, ignored) {
+        return this.wrapper((connection, slot) => new Promise((resolve, reject) => {
+            this.logger.debug("SSH (slot " + slot + ") list: ", dirname);
+            connection.readdir(dirname, (err, list) => {
+                if (err) reject(err);
+                else resolve(list);
+            })
+        }))
+        .then(list => {
+            let results = [];
+            for (let i = 0; i < list.length; i++) {
+                list[i].attrs.name = list[i].filename;
+                results.push(list[i].attrs);
+            }
+            return results;
+        })
+    }
     walk({dirname, ignored, on_file, on_error, pending_paths = []}) {
         return this.wrapper((connection, slot) => new Promise((resolve, reject) => {
             this.logger.debug("SSH (slot " + slot + ") list: ", dirname);
@@ -185,14 +202,14 @@ module.exports = class extends base {
                 else resolve(list);
             })
         }))
-        .then(list => list.reduce((p, file) => p
-            .then(() => {
-                let filename = path.posix.join(dirname, file.filename);
-                if (filename.match(ignored)) return;
-                if (file.attrs.isDirectory()) pending_paths.push(filename);
-                else on_file(filename, file.attrs);
-            })
-            .catch(on_error), Promise.resolve()))
+            .then(list => list.reduce((p, file) => p
+                .then(() => {
+                    let filename = path.posix.join(dirname, file.filename);
+                    if (filename.match(ignored)) return;
+                    if (file.attrs.isDirectory()) pending_paths.push(filename);
+                    else on_file(filename, file.attrs);
+                })
+                .catch(on_error), Promise.resolve()))
             .then(() => {
                 if (pending_paths.length) return this.walk({dirname: pending_paths.shift(), ignored, on_file, on_error, pending_paths});
             })

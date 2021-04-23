@@ -63,6 +63,7 @@ module.exports = class {
     move(source, target) {throw {message: "move method not implemented for " + this.protocol, not_implemented: 1}}
     remove(target) {throw {message: "remove method not implemented for " + this.protocol, not_implemented: 1}}
     tag(target) {throw {message: "tag method not implemented for " + this.protocol, not_implemented: 1}}
+    list(dirname) {throw {message: "list method not implemented for " + this.protocol, not_implemented: 1}}
     walk(params) {throw {message: "walk method not implemented for " + this.protocol, not_implemented: 1}}
     static filename(dirname, uri) {
         if (dirname === "." || dirname === "/" || dirname === "./" || dirname === "") return uri;
