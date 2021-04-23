@@ -37,26 +37,13 @@ module.exports = class extends base {
         }));
     }
     stat(filename, params = {}) {
+        filename = this.constructor.normalize_path(filename, true);
         if (filename === "." || filename === "/" || filename === "./" || filename === "") return Promise.resolve({
             name: '',
             size: 0,
             mtime: new Date(),
             isDirectory: () => true
         })
-        if (filename.endsWith('/')) {
-            return this.queue.run(slot => {
-                this.logger.debug("AWS S3 (slot " + slot + ") stat: ", filename);
-                return this.S3.listObjectsV2({Bucket: params.bucket || this.bucket, Prefix: filename}).promise();
-            })
-                .then(data => {
-                    if (data.Contents?.length) return {
-                        name: filename,
-                        size: 0,
-                        mtime: new Date(),
-                        isDirectory: () => true
-                    }
-                });
-        }
         return this.queue.run(slot => {
             this.logger.debug("AWS S3 (slot " + slot + ") stat: ", filename);
             return this.S3.headObject({Bucket: params.bucket || this.bucket, Key: filename}).promise()
@@ -71,13 +58,31 @@ module.exports = class extends base {
                 restoring: restore?.[1] === 'true',
                 isDirectory: () => false
             }
+        })
+        .catch(err => {
+            if (err.code === "NotFound" && !filename.endsWith('/')) { //check if stating a dir
+                return this.queue.run(slot => {
+                    this.logger.debug("AWS S3 (slot " + slot + ") stat: ", filename);
+                    return this.S3.listObjectsV2({Bucket: params.bucket || this.bucket, Prefix: filename}).promise();
+                })
+                .then(data => {
+                    if (data.Contents?.length) return {
+                        name: filename,
+                        size: 0,
+                        mtime: new Date(),
+                        isDirectory: () => true
+                    }
+                });
+            }
+            throw err;
         });
     }
     createReadStream(source, params = {}) {
+        source = this.constructor.normalize_path(source, true);
         return this.restore(source, params)
             .then(() => {
                 let range;
-                if (params.start && params.end) range = `bytes=${params.start}-${params.end}`;
+                if (params.start || params.end) range = `bytes=${params.start || 0}-${params.end || ""}`;
                 return this.queue.run((slot, slot_control) => {
                     this.logger.debug("AWS S3 (slot " + slot + ") create stream from: ", source);
                     let stream = this.S3.getObject({Bucket: params.bucket || this.bucket, Key: source, Range: range}).createReadStream()
@@ -90,6 +95,7 @@ module.exports = class extends base {
             });
     }
     createWriteStream(target, params = {}) {
+        target = this.constructor.normalize_path(target, true);
         return this.queue.run((slot, slot_control) => new Promise((resolve, reject) => {
             this.logger.debug("AWS S3 (slot " + slot + ") create write stream to: ", target);
             slot_control.keep_busy = true;
@@ -229,7 +235,7 @@ module.exports = class extends base {
     restore(source, params) {
         return this.stat(source, params)
             .then(data => {
-                if (!data.needs_restore) return data;
+                if (!data?.needs_restore) return data;
                 let key = path.posix.join(params.bucket || this.bucket, source);
                 return Promise.resolve()
                     .then(() => {
