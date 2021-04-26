@@ -82,10 +82,12 @@ module.exports = class extends base {
     }
     mkdir(dir) {
         if (!dir || dir === "/" || dir === ".") return;
-        return this.stat(dir)
+        return this.stat(dir).catch(() => {})
             .then(stat => {
-                if (stat.isDirectory()) throw {exists: true};
-                throw dir + " exists and is a file. Cannot create it as directory";
+                if (stat) {
+                    if (stat.isDirectory()) throw {exists: true};
+                    throw dir + " exists and is a file. Cannot create it as directory";
+                }
             })
             .then(() => this.wrapper((connection, slot) => new Promise((resolve, reject) => {
                 this.logger.debug("FTP (slot " + slot + ") mkdir: ", dir);
