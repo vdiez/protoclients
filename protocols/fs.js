@@ -38,9 +38,18 @@ module.exports = class extends base {
             return fs.ensureDir(dir);
         });
     }
-    write(target, contents = '') {
+    write(target, contents = '', params) {
         return this.queue.run(slot => {
             this.logger.debug("FS (slot " + slot + ") write: ", target);
+            if (params.start || params.end) {
+                return new Promise((resolve, reject) => {
+                    let stream = fs.createWriteStream(target, params);
+                    new (require('stream').Readable)({read() {this.push(contents, params.encoding);this.push(null);}}).pipe(stream);
+                    stream.on('error', reject);
+                    stream.on('end', resolve);
+                    stream.on('close', resolve);
+                })
+            }
             return fs.writeFile(target, contents);
         });
     }
