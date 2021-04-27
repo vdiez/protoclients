@@ -51,20 +51,51 @@ module.exports = class extends base {
         this.connections[slot].end();
         this.logger.info("FTP (slot " + slot + ") connection closed with " + this.params.host);
     }
-    createReadStream(source) {
-        return this.wrapper((connection, slot, slot_control) => new Promise((resolve, reject) => {
-            this.logger.debug("FTP (slot " + slot + ") create read stream from: ", source);
-            connection.get(source, (err, stream) => {
-                if (err) reject(err);
-                else {
-                    slot_control.keep_busy = true;
-                    stream.on('error', slot_control.release_slot);
-                    stream.on('end', slot_control.release_slot);
-                    stream.on('close', slot_control.release_slot);
-                    resolve(stream);
+    createReadStream(source, options) {
+        return this.wrapper((connection, slot, slot_control) => Promise.resolve()
+            .then(() => {
+                if (options.start) {
+                    return new Promise((resolve, reject) => {
+                        this.logger.debug("FTP (slot " + slot + ") restart get from(bytes): ", source, options.start);
+                        connection.restart(options.start, err => {
+                            if (err) reject(err);
+                            else resolve();
+                        });
+                    })
                 }
-            });
-        }), true);
+            })
+            .then(() => new Promise((resolve, reject) => {
+                this.logger.debug("FTP (slot " + slot + ") create read stream from: ", source);
+                connection.get(source, (err, stream) => {
+                    if (err) reject(err);
+                    else {
+                        slot_control.keep_busy = true;
+                        stream.on('error', slot_control.release_slot);
+                        stream.on('end', slot_control.release_slot);
+                        stream.on('close', slot_control.release_slot);
+                        if (options.end) {
+                            let missing = params.end - (params.start || 0);
+                            let limiter = new (require('stream')).Transform({
+                                transform(chunk, encoding, callback) {
+                                    let length = Buffer.byteLength(chunk);
+
+                                    if (missing - length < 0) {
+                                        stream.destroy();
+                                        callback(null, chunk.slice(0, missing));
+                                    }
+                                    else {
+                                        missing -= length;
+                                        callback(null, chunk);
+                                    }
+                                }
+                            });
+                            stream.pipe(limiter);
+                            resolve(limiter);
+                        }
+                        else resolve(stream);
+                    }
+                });
+            })), true);
     }
     createWriteStream(target) {
         return this.wrapper((connection, slot, slot_control) => new Promise((resolve, reject) => {
@@ -98,13 +129,47 @@ module.exports = class extends base {
         }));
     }
     read(filename, params = {}) {
-        return this.wrapper((connection, slot) => new Promise((resolve, reject) => {
-            this.logger.debug("FTP (slot " + slot + ") download from: ", filename);
-            connection.get(filename, (err, stream) => {
-                if (err) reject(err);
-                else this.constructor.get_data(stream, params.encoding).then(data => resolve(data)).catch(err => reject(err));
+        return this.wrapper((connection, slot) => Promise.resolve()
+            .then(() => {
+                if (params.start) {
+                    return new Promise((resolve, reject) => {
+                        this.logger.debug("FTP (slot " + slot + ") restart get from(bytes): ", filename, params.start);
+                        connection.restart(params.start, err => {
+                            if (err) reject(err);
+                            else resolve();
+                        });
+                    })
+                }
             })
-        }));
+            .then(() => new Promise((resolve, reject) => {
+                this.logger.debug("FTP (slot " + slot + ") download from: ", filename);
+                connection.get(filename, (err, stream) => {
+                    if (err) reject(err);
+                    else {
+                        if (params.end) {
+                            let missing = params.end - (params.start || 0);
+                            let chunks = [];
+                            stream.on('error', reject);
+                            stream.on('end', () => resolve(Buffer.concat(chunks, params.end - params.start)));
+                            stream.on('close', () => resolve(Buffer.concat(chunks, params.end - params.start)));
+                            stream.on('data', chunk => {
+                                let length = Buffer.byteLength(chunk);
+
+                                if (missing - length < 0) {
+                                    stream.destroy();
+                                    chunks.push(chunk.slice(0, missing));
+                                }
+                                else {
+                                    missing -= length;
+                                    chunks.push(chunk);
+                                }
+                            });
+                        }
+                        else this.constructor.get_data(stream, params.encoding).then(data => resolve(data)).catch(err => reject(err));
+                    }
+                })
+            })
+        ));
     }
     stat(file) {
         return this.list_uri(file)

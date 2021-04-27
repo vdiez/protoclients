@@ -102,13 +102,19 @@ module.exports = class extends base {
                 else if (!err || !err.exists) throw err;
             });
     }
-    read(filename, encoding = 'utf8') {
+    read(filename, params) {
         return this.wrapper((connection, slot) => new Promise((resolve, reject) => {
             this.logger.debug("SSH (slot " + slot + ") download from: ", filename);
-            connection.readFile(filename, {encoding: encoding}, (err, contents) => {
-                if (err) reject(err);
-                else resolve(contents);
-            });
+            if (params.start || params.end) {
+                let stream = connection.createReadStream(filename)
+                this.constructor.get_data(stream, params.encoding).then(data => resolve(data)).catch(err => reject(err));
+            }
+            else {
+                connection.readFile(filename, params, (err, contents) => {
+                    if (err) reject(err);
+                    else resolve(contents);
+                });
+            }
         }));
     }
     stat(file) {

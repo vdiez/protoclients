@@ -31,9 +31,12 @@ module.exports = class extends base {
         super.update_settings(params);
     }
     read(filename, params = {}) {
+        filename = this.constructor.normalize_path(filename, true);
         return this.restore(filename, params).then(() => this.queue.run(slot => {
+            let range;
+            if (params.start || params.end) range = `bytes=${params.start || 0}-${params.end || ""}`;
             this.logger.debug("AWS S3 (slot " + slot + ") read: ", filename);
-            return this.S3.getObject({Bucket: params.bucket || this.bucket, Key: filename}).promise().then(data => this.constructor.get_data(data.Body, params.encoding));
+            return this.S3.getObject({Bucket: params.bucket || this.bucket, Key: filename, Range: range}).promise().then(data => this.constructor.get_data(data.Body, params.encoding));
         }));
     }
     stat(filename, params = {}) {

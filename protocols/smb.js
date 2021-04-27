@@ -75,10 +75,18 @@ module.exports = class extends base {
     read(filename, params = {}) {
         return this.wrapper((connection, slot) => new Promise((resolve, reject) => {
             this.logger.debug("SMB (slot " + slot + ") download from: ", filename);
-            connection.readFile(filename.replace(/\//g, "\\"), {encoding: params.encoding}, (err, contents) => {
-                if (err) reject(err);
-                else resolve(contents);
-            });
+            if (params.start || params.end) {
+                connection.createReadStream(filename.replace(/\//g, "\\"), params, (err, stream) => {
+                    if (err) reject(err);
+                    else this.constructor.get_data(stream, params.encoding).then(data => resolve(data)).catch(err => reject(err));
+                });
+            }
+            else {
+                connection.readFile(filename.replace(/\//g, "\\"), {encoding: params.encoding}, (err, contents) => {
+                    if (err) reject(err);
+                    else resolve(contents);
+                });
+            }
         }));
     }
     write(target, contents = new Buffer(0), params = {}) {

@@ -44,10 +44,14 @@ module.exports = class extends base {
             return fs.writeFile(target, contents);
         });
     }
-    read(filename, encoding = 'utf8') {
+    read(filename, params) {
         return this.queue.run(slot => {
             this.logger.debug("FS (slot " + slot + ") read: ", filename);
-            return fs.readFile(filename, encoding);
+            if (params.start || params.end) {
+                let stream = fs.createReadStream(filename, params);
+                return this.constructor.get_data(stream, params.encoding);
+            }
+            else return fs.readFile(filename, params);
         });
     }
     copy(source, target, streams, size, params) {
