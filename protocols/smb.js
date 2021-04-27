@@ -92,10 +92,23 @@ module.exports = class extends base {
     write(target, contents = new Buffer(0), params = {}) {
         return this.wrapper((connection, slot) => new Promise((resolve, reject) => {
             this.logger.debug("SMB (slot " + slot + ") upload to: ", target);
-            connection.writeFile(target, contents, {encoding: params.encoding}, err => {
-                if (err) reject(err);
-                else resolve();
-            });
+            if (params.start || params.end) {
+                connection.createWriteStream(target.replace(/\//g, "\\"), params, (err, stream) => {
+                    if (err) reject(err);
+                    else {
+                        new (require('stream').Readable)({read() {this.push(contents, params.encoding);this.push(null);}}).pipe(stream);
+                        stream.on('error', reject);
+                        stream.on('end', resolve);
+                        stream.on('close', resolve);
+                    }
+                })
+            }
+            else {
+                connection.writeFile(target, contents, {encoding: params.encoding}, err => {
+                    if (err) reject(err);
+                    else resolve();
+                });
+            }
         }));
     }
     stat(filename) {

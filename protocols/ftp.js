@@ -56,7 +56,7 @@ module.exports = class extends base {
             .then(() => {
                 if (options.start) {
                     return new Promise((resolve, reject) => {
-                        this.logger.debug("FTP (slot " + slot + ") restart get from(bytes): ", source, options.start);
+                        this.logger.debug("FTP (slot " + slot + ") restart readStream from(bytes): ", source, options.start);
                         connection.restart(options.start, err => {
                             if (err) reject(err);
                             else resolve();
@@ -97,17 +97,29 @@ module.exports = class extends base {
                 });
             })), true);
     }
-    createWriteStream(target) {
-        return this.wrapper((connection, slot, slot_control) => new Promise((resolve, reject) => {
-            this.logger.debug("FTP (slot " + slot + ") create write stream to: ", target);
-            slot_control.keep_busy = true;
-            let stream = {passThrough: new (require('stream')).PassThrough()};
-            connection.put(stream, target, err => {
-                if (err) reject(err);
-                slot_control.release_slot();
-            });
-            resolve(stream);
-        }), true);
+    createWriteStream(target, options) {
+        return this.wrapper((connection, slot, slot_control) => Promise.resolve()
+            .then(() => {
+                if (options.start) {
+                    return new Promise((resolve, reject) => {
+                        this.logger.debug("FTP (slot " + slot + ") restart writeStream to(bytes): ", target, options.start);
+                        connection.restart(options.start, err => {
+                            if (err) reject(err);
+                            else resolve();
+                        });
+                    })
+                }
+            })
+            .then(() => new Promise((resolve, reject) => {
+                this.logger.debug("FTP (slot " + slot + ") create write stream to: ", target);
+                slot_control.keep_busy = true;
+                let stream = new (require('stream')).PassThrough();
+                connection.put(stream, target, err => {
+                    if (err) reject(err);
+                    slot_control.release_slot();
+                });
+                resolve(stream);
+            })), true);
     }
     mkdir(dir) {
         return this.wrapper((connection, slot) => new Promise((resolve, reject) => {
@@ -178,14 +190,26 @@ module.exports = class extends base {
                 return {size: 0, mtime: new Date(), isDirectory: () => true};
             });
     }
-    write(target, contents = new Buffer(0)) {
-        return this.wrapper((connection, slot) => new Promise((resolve, reject) => {
-            this.logger.debug("FTP (slot " + slot + ") upload to: ", target);
-            connection.put(contents, target, err => {
-                if (err) reject(err);
-                else resolve();
+    write(target, contents = new Buffer(0), params) {
+        return this.wrapper((connection, slot) => Promise.resolve()
+            .then(() => {
+                if (params.start) {
+                    return new Promise((resolve, reject) => {
+                        this.logger.debug("FTP (slot " + slot + ") restart put to(bytes): ", target, params.start);
+                        connection.restart(params.start, err => {
+                            if (err) reject(err);
+                            else resolve();
+                        });
+                    })
+                }
             })
-        }));
+            .then(() => new Promise((resolve, reject) => {
+                this.logger.debug("FTP (slot " + slot + ") upload to: ", target);
+                connection.put(contents, target, err => {
+                    if (err) reject(err);
+                    else resolve();
+                })
+            })));
     }
     copy(source, target, streams, size, params) {
         if (!streams.readStream) throw {message: "local copy not implemented for " + this.protocol, not_implemented: 1}
