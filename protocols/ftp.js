@@ -186,7 +186,7 @@ module.exports = class extends base {
     stat(file) {
         return this.list_uri(file)
             .then(list => {
-                if (list?.length === 1 && list[0]?.name === file) return {size: list[0].size, mtime: list[0].date, isDirectory: () => false};
+                if (list?.length === 1 && path.posix.basename(list[0]?.name) === path.posix.basename(file)) return {size: list[0].size, mtime: list[0].date, isDirectory: () => false};
                 return {size: 0, mtime: new Date(), isDirectory: () => true};
             });
     }
