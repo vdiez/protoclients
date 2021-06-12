@@ -74,7 +74,7 @@ module.exports = class extends base {
                         stream.on('end', slot_control.release_slot);
                         stream.on('close', slot_control.release_slot);
                         if (options.end) {
-                            let missing = params.end - (params.start || 0);
+                            let missing = options.end - (options.start || 0);
                             let limiter = new (require('stream')).Transform({
                                 transform(chunk, encoding, callback) {
                                     let length = Buffer.byteLength(chunk);
