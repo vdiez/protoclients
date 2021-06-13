@@ -93,9 +93,9 @@ module.exports = class extends base {
                                 }
                             });
                             stream.pipe(limiter);
-                            limiter.on('error', slot_control.release_slot);
-                            limiter.on('end', slot_control.release_slot);
-                            limiter.on('close', slot_control.release_slot);
+                            limiter.on('error', () => stream.destroy(err));
+                            limiter.on('end', () => stream.destroy());
+                            limiter.on('close', () => stream.destroy());
                             resolve(limiter);
                         }
                         else resolve(stream);
