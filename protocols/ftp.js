@@ -14,7 +14,7 @@ module.exports = class extends base {
         polling: {boolean: true},
         polling_interval: {number: true}
     };
-    static accept_ranges = false;
+    static accept_ranges = true;
 
     constructor(params, logger) {
         super(params, logger, "ftp");
@@ -74,14 +74,17 @@ module.exports = class extends base {
                         stream.on('end', slot_control.release_slot);
                         stream.on('close', slot_control.release_slot);
                         if (options.end) {
-                            let missing = options.end - (options.start || 0);
+                            let missing = options.end - (options.start || 0) + 1;
+                            let finished = false;
                             let limiter = new (require('stream')).Transform({
                                 transform(chunk, encoding, callback) {
                                     let length = Buffer.byteLength(chunk);
+                                    if (finished) return;
 
-                                    if (missing - length < 0) {
+                                    if (missing - length <= 0) {
                                         stream.destroy();
-                                        callback(null, chunk.slice(0, missing));
+                                        finished = true;
+                                        callback(null, missing === length ? chunk : chunk.slice(0, missing));
                                     }
                                     else {
                                         missing -= length;
@@ -159,7 +162,7 @@ module.exports = class extends base {
                     if (err) reject(err);
                     else {
                         if (params.end) {
-                            let missing = params.end - (params.start || 0);
+                            let missing = params.end - (params.start || 0) + 1;
                             let chunks = [];
                             stream.on('error', reject);
                             stream.on('end', () => resolve(Buffer.concat(chunks, params.end - params.start)));
