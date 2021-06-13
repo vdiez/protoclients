@@ -87,21 +87,21 @@ module.exports = class {
                 this.on_error(err);
             }
         })
-            .then(() => {
-                for (let filename in this.fileObjects) {
-                    if (this.fileObjects.hasOwnProperty(filename) && this.fileObjects[filename].last_seen !== this.now) {
-                        this.on_file_removed(filename);
-                        this.logger.info(this.connection.protocol.toUpperCase() + " walk removing: ", filename);
-                    }
+        .catch(err => {
+            this.logger.error("Walk failed with dirname: ", this.dirname, err);
+            this.on_error(err);
+        })
+        .then(() => {
+            for (let filename in this.fileObjects) {
+                if (this.fileObjects.hasOwnProperty(filename) && this.fileObjects[filename].last_seen !== this.now) {
+                    this.on_file_removed(filename);
+                    this.logger.info(this.connection.protocol.toUpperCase() + " walk removing: ", filename);
                 }
-                if (this.polling) this.timeout = setTimeout(() => {
-                    this.loop_watcher();
-                }, this.polling);
-            })
-            .catch(err => {
-                this.logger.error("Walk failed with dirname: ", this.dirname, err);
-                this.on_error(err);
-            })
+            }
+            if (this.polling) this.timeout = setTimeout(() => {
+                this.loop_watcher();
+            }, this.polling);
+        })
     }
 
     start_watch() {
