@@ -25,7 +25,7 @@ module.exports = ({logger, protocol, params} = {}) => {
 
 module.exports.parameters = protocol => {
     if (!protocols.includes(protocol + ".js")) throw "Incorrect protocol";
-    return require('./protocols/' + protocol).parameters();
+    return require('./protocols/' + protocol).parameters;
 }
 
 module.exports.list = () => protocols.reduce((result, protocol) => {
