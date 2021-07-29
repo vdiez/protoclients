@@ -299,7 +299,7 @@ module.exports = class extends base {
                 let list = data.Contents || [];
                 for (let i = 0; i < list.length; i++) {
                     let {Key, Size, LastModified} = list[i];
-                    Key = this.constructor.filename(dirname, Key);
+                    Key = this.constructor.get_filename(dirname, Key);
                     let slash_pos = Key.indexOf('/');
                     if (slash_pos < 0) results.push({name: Key, size: Size, mtime: LastModified, isDirectory: () => false});
                     else {
@@ -331,15 +331,9 @@ module.exports = class extends base {
             })
             .catch(on_error);
     }
-    static normalize_path(dirname, is_filename) {
-        if (dirname === "." || dirname === "/" || dirname === "./" || dirname === "") return '';
-        return (dirname || "").replace(/[\\\/]+/g, "/").replace(/\/+$/, "").concat(is_filename ? "" : "/").replace(/^\/+/, "")
-    }
-    static filename(dirname, uri) {
-        if (dirname === "." || dirname === "/" || dirname === "./" || dirname === "") return uri;
-        return uri.slice(dirname.length);
-    }
-    static path(dirname, filename) {
-        return this.normalize_path(dirname) + filename;
+    static normalize_path(uri, is_filename) {
+        uri = super.normalize_path(uri);
+        if (uri === "." || uri === "/" || uri === "./" || uri === "") return '';
+        return uri.replace(/\/+$/, "").concat(is_filename ? "" : "/").replace(/^\/+/, "")
     }
 }

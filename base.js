@@ -65,12 +65,9 @@ module.exports = class {
     tag(target) {throw {message: "tag method not implemented for " + this.protocol, not_implemented: 1}}
     list(dirname) {throw {message: "list method not implemented for " + this.protocol, not_implemented: 1}}
     walk(params) {throw {message: "walk method not implemented for " + this.protocol, not_implemented: 1}}
-    static filename(dirname, uri) {
-        if (dirname === "." || dirname === "/" || dirname === "./" || dirname === "") return uri;
-        return uri.slice(dirname.length + 1);
-    }
-    static path(dirname, filename) {
-        return path.posix.join(this.normalize_path(dirname), filename);
+    static get_filename(dirname, uri) {
+        if (dirname === "." || dirname === "/" || dirname === "./" || dirname === "") return uri.replace(/^[\/]+/, "");
+        return uri.slice(dirname.length).replace(/^\/+/, "");
     }
     static normalize_path(dirname) {
         return path.posix.normalize((dirname || "").replace(/[\\\/]+/g, "/")).replace(/^(.+?)\/*?$/, "$1");  //remove trailing slashes unless it's root path

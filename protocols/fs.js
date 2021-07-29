@@ -118,9 +118,9 @@ module.exports = class extends base {
             })
         });
     }
-    static normalize_path(uri, is_filename, is_absolute = true) {
+    static normalize_path(uri) {
         uri = super.normalize_path(uri);
-        if (process.platform === "win32" && is_absolute) {
+        if (process.platform === "win32") {
             if (uri.startsWith('/')) uri = "C:" + uri;
             uri = uri[0].toUpperCase() + uri.slice(1);
         }

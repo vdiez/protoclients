@@ -31,7 +31,7 @@ module.exports = class extends base {
             this.logger.debug("HTTP (slot " + slot + ") stat: ", filename);
             return got.head(filename, {retry: 0, https: {rejectUnauthorized: false}});
         })
-            .then(response => {
+        .then(response => {
             let stats = {isDirectory: () => false};
             let headers = response.headers;
             if (headers && headers['content-length']) stats.size = parseInt(headers['content-length'], 10);
@@ -39,7 +39,9 @@ module.exports = class extends base {
             return stats;
         });
     }
-    static normalize_path(dirname, is_filename) {
-        return (dirname || "").replace(/[\\\/]+/g, "/").replace(/\/+$/, "").concat(is_filename ? "" : "/").replace(/^\/+/, "")
+    static normalize_path(uri, is_filename) {
+        uri = super.normalize_path(uri);
+        if (uri === "." || uri === "/" || uri === "./" || uri === "") return '';
+        return uri.replace(/\/+$/, "").concat(is_filename ? "" : "/").replace(/^\/+/, "");
     }
 }
