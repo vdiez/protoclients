@@ -5,13 +5,13 @@ let publish = require('../default_publish');
 
 module.exports = class extends base {
     static parameters = {
-        parallel: {number: true},
-        host: {text: true},
-        port: {number: true},
-        username: {text: true},
-        password: {secret: true},
-        polling: {boolean: true},
-        polling_interval: {number: true}
+        parallel: {type: "number"},
+        host: {type: "text"},
+        port: {type: "number"},
+        username: {type: "text"},
+        password: {type: "secret"},
+        polling: {type: "boolean"},
+        polling_interval: {type: "number"}
     };
     constructor(params, logger) {
         super(params, logger, "ssh");

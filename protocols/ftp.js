@@ -5,14 +5,14 @@ let publish = require('../default_publish');
 
 module.exports = class extends base {
     static parameters = {
-        parallel: {number: true},
-        host: {text: true},
-        port: {number: true},
-        secure: {boolean: true},
-        username: {text: true},
-        password: {secret: true},
-        polling: {boolean: true},
-        polling_interval: {number: true}
+        parallel: {type: "number"},
+        host: {type: "text"},
+        port: {type: "number"},
+        secure: {type: "boolean"},
+        username: {type: "text"},
+        password: {type: "secret"},
+        polling: {type: "boolean"},
+        polling_interval: {type: "number"}
     };
     static accept_ranges = true;
 

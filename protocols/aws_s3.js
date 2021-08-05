@@ -9,13 +9,13 @@ let qs = require("querystring");
 
 module.exports = class extends base {
     static parameters = {
-        parallel: {number: true},
-        access_key: {secret: true},
-        secret: {secret: true},
-        bucket: {text: true},
-        region: {text: true},
-        polling: {boolean: true},
-        polling_interval: {number: true}
+        parallel: {type: "number"},
+        access_key: {type: "secret"},
+        secret: {type: "secret"},
+        bucket: {type: "text"},
+        region: {type: "text"},
+        polling: {type: "boolean"},
+        polling_interval: {type: "number"}
     };
     constructor(params, logger) {
         super(params, logger, "aws_s3");
