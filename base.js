@@ -5,9 +5,9 @@ let watcher = require('./watcher');
 
 module.exports = class {
     static parameters = {
-        parallel: {type: "number"},
+        parallel: {type: "number", max: 500},
         polling: {type: "boolean"},
-        polling_interval: {type: "number"}
+        polling_interval: {type: "number", min: 5000}
     };
     static accept_ranges = true;
     constructor(params, logger, protocol) {
