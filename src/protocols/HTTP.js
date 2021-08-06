@@ -1,6 +1,6 @@
 const got = require('got');
-const Base = require('../base');
-const {rootDirnames} = require('../config');
+const Base = require('./Base');
+const {rootDirnames} = require('../../config');
 
 class HTTP extends Base {
     static parameters = [];

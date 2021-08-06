@@ -1,6 +1,6 @@
 const chokidar = require('chokidar');
 const fs = require('fs-extra');
-const {watcherConfig} = require('./config');
+const {watcherConfig} = require('../config');
 const DateFormatter = require('./utils/dateFormatter');
 
 const noop = () => {};

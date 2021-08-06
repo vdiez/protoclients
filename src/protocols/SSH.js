@@ -1,9 +1,9 @@
 const Client = require('ssh2').Client;
 const path = require('path').posix;
 const Stream = require('stream');
-const Base = require('../base');
+const Base = require('./Base');
 const publish = require('../default_publish');
-const {rootDirnames} = require('../config');
+const {rootDirnames} = require('../../config');
 
 class SSH extends Base {
     static parameters = {

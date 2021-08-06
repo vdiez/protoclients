@@ -2,7 +2,7 @@ const fs = require('fs-extra');
 // Can we remove posix ?
 const path = require('path').posix;
 const Stream = require('stream');
-const Base = require('../base');
+const Base = require('./Base');
 const publish = require('../default_publish');
 
 class FS extends Base {

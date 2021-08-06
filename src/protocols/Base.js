@@ -3,8 +3,8 @@ const path = require('path').posix;
 const get_stream = require('get-stream');
 const is_stream = require('is-stream');
 const parallel_limit = require('parallel_limit');
-const Watcher = require('./watcher');
-const {rootDirnames, timeoutConnection} = require('./config');
+const Watcher = require('../Watcher');
+const {rootDirnames, timeoutConnection} = require('../../config');
 
 class Base {
     static accept_ranges = true;
@@ -83,10 +83,10 @@ class Base {
     }
 
     static normalize_path(dirname = '') {
-        // What those regex are supposed to do ?
         const normalized = path.normalize(dirname);
         const removedDoubleSlashes = normalized.replace(/[\\/]+/g, '/');
-        const removedTrailingSlashes = removedDoubleSlashes.replace(/^(.+?)\/*?$/, '$1'); // remove trailing slashes unless it's root path
+        // remove trailing slashes unless it's root path
+        const removedTrailingSlashes = removedDoubleSlashes.replace(/^(.+?)\/*?$/, '$1');
         return removedTrailingSlashes;
     }
 

@@ -1,4 +1,4 @@
-const PROTOCOLS = require('./protocols');
+const PROTOCOLS = require('./src/protocols');
 
 const silentLogger = {
     info() {}, warn() {}, error() {}, verbose() {}, debug() {}

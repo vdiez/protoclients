@@ -1,7 +1,7 @@
 const Client = require('@marsaud/smb2');
 const path = require('path').posix;
 const Stream = require('stream');
-const Base = require('../base');
+const Base = require('./Base');
 const publish = require('../default_publish');
 
 class SMB extends Base {

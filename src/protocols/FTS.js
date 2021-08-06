@@ -1,9 +1,9 @@
 const Client = require('ftp');
 const path = require('path').posix;
 const Stream = require('stream');
-const Base = require('../base');
+const Base = require('./Base');
 const publish = require('../default_publish');
-const {rootDirnames} = require('../config');
+const {rootDirnames} = require('../../config');
 
 class FTP extends Base {
     static accept_ranges = true;
@@ -97,14 +97,14 @@ class FTP extends Base {
     createReadStream(source, options) {
         const control_release = true;
         return this.wrapper((connection, slot, slot_control) => {
-            const restartPromise = new Promise((resolve, reject) => {
+            const restartPromise = () => new Promise((resolve, reject) => {
                 if (!options.start) {
                     return resolve();
                 }
                 this.logger.debug(`FTP (slot ${slot}) restart readStream from(bytes): `, source, options.start);
                 return connection.restart(options.start, err => (err ? reject(err) : resolve()));
             });
-            const getPromise = new Promise((resolve, reject) => {
+            const getPromise = () => new Promise((resolve, reject) => {
                 connection.get(source, (err, stream) => {
                     if (err) {
                         return reject(err);
@@ -152,14 +152,14 @@ class FTP extends Base {
     createWriteStream(target, options) {
         const control_release = true;
         return this.wrapper((connection, slot, slot_control) => {
-            const restartPromise = new Promise((resolve, reject) => {
+            const restartPromise = () => new Promise((resolve, reject) => {
                 if (!options.start) {
                     return resolve();
                 }
                 this.logger.debug(`FTP (slot ${slot}) restart writeStream from(bytes): `, target, options.start);
                 return connection.restart(options.start, err => (err ? reject(err) : resolve()));
             });
-            const putPromise = new Promise((resolve, reject) => {
+            const putPromise = () => new Promise((resolve, reject) => {
                 slot_control.keep_busy = true;
                 const stream = new Stream.PassThrough();
                 connection.put(stream, target, err => {
@@ -197,14 +197,14 @@ class FTP extends Base {
     read(filename, params = {}) {
         const control_release = true;
         return this.wrapper((connection, slot) => {
-            const restartPromise = new Promise((resolve, reject) => {
+            const restartPromise = () => new Promise((resolve, reject) => {
                 if (!params.start) {
                     return resolve();
                 }
                 this.logger.debug(`FTP (slot ${slot}) restart get from(bytes): `, filename, params.start);
                 return connection.restart(params.start, err => (err ? reject(err) : resolve()));
             });
-            const getPromise = new Promise((resolve, reject) => {
+            const getPromise = () => new Promise((resolve, reject) => {
                 connection.get(filename, (err, stream) => {
                     if (err) {
                         reject(err);
@@ -257,14 +257,14 @@ class FTP extends Base {
 
     write(target, contents = Buffer.allocUnsafe(0), params) {
         return this.wrapper((connection, slot) => {
-            const restartPromise = new Promise((resolve, reject) => {
+            const restartPromise = () => new Promise((resolve, reject) => {
                 if (!params.start) {
                     return resolve();
                 }
                 this.logger.debug(`FTP (slot ${slot}) restart put from(bytes): `, target, params.start);
                 return connection.restart(params.start, err => (err ? reject(err) : resolve()));
             });
-            const putPromise = new Promise((resolve, reject) => {
+            const putPromise = () => new Promise((resolve, reject) => {
                 connection.put(contents, target, err => (err ? reject(err) : resolve()));
             });
             return restartPromise.then(() => {

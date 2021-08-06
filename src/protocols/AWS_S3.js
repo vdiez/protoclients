@@ -4,15 +4,15 @@ const mime = require('mime-types');
 const qs = require('querystring');
 const Stream = require('stream');
 const parallel_limit = require('parallel_limit');
-const Base = require('../base');
+const Base = require('./Base');
 
-const {awsConfig, rootDirnames} = require('../config');
+const {awsConfig, rootDirnames} = require('../../config');
 
 const maxTrials = 3;
 const minPartSize = 5242880;
 
 class AWS extends Base {
-    static parameters ={
+    static parameters = {
         access_key: {
             secret: true
         },
