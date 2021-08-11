@@ -54,6 +54,7 @@ module.exports = class {
     }
 
     loop_watcher() {
+        if (!this.started) return;
         if (this.connection.protocol === "fs") {
             return fs.mkdirp(this.dirname, {mode: 0o2775})
                 .then(() => new Promise((resolve, reject) => {
@@ -76,6 +77,7 @@ module.exports = class {
             bucket: this.bucket,
             ignored: this.ignored,
             on_file: (filename, stats) => {
+                if (!this.started) return;
                 if (!this.fileObjects[filename] || (this.fileObjects[filename] && stats.size !== this.fileObjects[filename].size)) {
                     this.logger.info(this.connection.protocol + " walk adding: ", filename);
                     this.on_file_added(filename, stats);
@@ -116,6 +118,8 @@ module.exports = class {
             .then(() => {
                 this.started = false;
                 if (this.connection.protocol === "fs") return this.watcher?.close();
+            })
+            .then(() => {
                 clearTimeout(this.timeout);
                 this.polling = false;
                 this.fileObjects = {};
