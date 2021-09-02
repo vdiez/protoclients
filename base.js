@@ -3,13 +3,7 @@ const get_stream = require('get-stream');
 const is_stream = require('is-stream');
 let watcher = require('./watcher');
 
-module.exports = class {
-    static parameters = {
-        parallel: {number: true},
-        polling: {boolean: true},
-        polling_interval: {number: true}
-    };
-    static accept_ranges = true;
+class Base {
     constructor(params, logger, protocol) {
         this.logger = logger;
         this.protocol = protocol;
@@ -19,6 +13,12 @@ module.exports = class {
         this.connections = new Array(params.parallel).fill(null);
         this.update_settings(params);
     }
+    static parameters = {
+        parallel: {number: true},
+        polling: {boolean: true},
+        polling_interval: {number: true}
+    };
+    static accept_ranges = true;
     id() {
         return this.constructor.generate_id(this.params);
     }
@@ -88,3 +88,5 @@ module.exports = class {
             })
     }
 }
+
+module.exports = Base;

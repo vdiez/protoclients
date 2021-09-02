@@ -20,7 +20,14 @@ module.exports = class extends base {
         super(params, logger, "ftp");
     }
     static generate_id(params) {
-        return JSON.stringify({protocol: 'ftp', host: params.host, user: params.username, password: params.password, port: params.port, secure: params.secure});
+        return JSON.stringify({
+            protocol: 'ftp', 
+            host: params.host, 
+            user: params.username, 
+            password: params.password, 
+            port: params.port, 
+            secure: params.secure
+        });
     }
     connect(slot) {
         if (this.connections[slot]) return this.connections[slot];
@@ -43,7 +50,16 @@ module.exports = class extends base {
                     this.connections[slot] = null;
                     reject("FTP (slot " + slot + ") connection lost to host " + this.params.host + ". Due to error: " + had_error);
                 })
-                .connect({host: this.params.host, user: this.params.username, password: this.params.password, port: this.params.port, secure: this.params.secure, secureOptions: {rejectUnauthorized: false}});
+                .connect({
+                    host: this.params.host, 
+                    user: this.params.username, 
+                    password: this.params.password, 
+                    port: this.params.port, 
+                    secure: this.params.secure, 
+                    secureOptions: {
+                        rejectUnauthorized: false
+                    }
+                });
         });
     }
     disconnect(slot) {
@@ -197,7 +213,7 @@ module.exports = class extends base {
                 return {size: 0, mtime: new Date(), isDirectory: () => true};
             });
     }
-    write(target, contents = new Buffer(0), params) {
+    write(target, contents = new Buffer(''), params) {
         return this.wrapper((connection, slot) => Promise.resolve()
             .then(() => {
                 if (params.start) {
