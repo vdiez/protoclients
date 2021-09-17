@@ -63,6 +63,7 @@ module.exports = class extends base {
         }), true);
     }
     mkdir(dir) {
+        if (!dir || dir === "/" || dir === ".") return;
         return this.wrapper((connection, slot) => new Promise((resolve, reject) => {
             this.logger.debug("SMB (slot " + slot + ") mkdir: ", dir);
             connection.mkdir(dir.replace(/\//g, "\\"), err => {

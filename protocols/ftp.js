@@ -127,8 +127,8 @@ module.exports = class extends base {
             })), true);
     }
     mkdir(dir) {
+        if (dir === "." || dir === "/" || dir === "") return;
         return this.wrapper((connection, slot) => new Promise((resolve, reject) => {
-            if (dir === "." || dir === "/" || dir === "") resolve();
             this.logger.debug("FTP (slot " + slot + ") mkdir: ", dir);
             connection.mkdir(dir, true, err => {
                 if (err) reject(err);
