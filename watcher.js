@@ -1,23 +1,20 @@
-let moment = require('moment');
-let chokidar = require('chokidar');
-let fs = require('fs-extra');
+const moment = require('moment');
+const chokidar = require('chokidar');
+const fs = require('fs-extra');
 
 module.exports = class {
     //(^|[\/\\])\.+([^\/\\\.]|$)/
     constructor({
-            dirname,
-            bucket,
-            ignored = /(^|[\/\\])\../,
-            on_watch_start = () => {},
-            on_watch_stop = () => {},
-            on_watch_complete = () => {},
-            on_file_added = () => {},
-            on_file_removed = () => {},
-            on_error = () => {}
-        },
-        logger,
-        connection
-    ) {
+        dirname,
+        bucket,
+        ignored = /(^|[/\\])\../,
+        on_watch_start = () => {},
+        on_watch_stop = () => {},
+        on_watch_complete = () => {},
+        on_file_added = () => {},
+        on_file_removed = () => {},
+        on_error = () => {}
+    }, logger, connection) {
         this.logger = logger;
         this.on_error = on_error;
         this.on_watch_complete = on_watch_complete;
@@ -44,18 +41,16 @@ module.exports = class {
                 this.options.binaryInterval = polling_interval;
             }
         }
+        else if (polling && polling_interval) this.polling = polling_interval;
         else {
-            if (polling && polling_interval) this.polling = polling_interval;
-            else {
-                clearTimeout(this.timeout);
-                this.polling = false;
-            }
+            clearTimeout(this.timeout);
+            this.polling = false;
         }
     }
 
     loop_watcher() {
         if (!this.started) return;
-        if (this.connection.protocol === "fs") {
+        if (this.connection.protocol === 'fs') {
             return fs.mkdirp(this.dirname, {mode: 0o2775})
                 .then(() => new Promise((resolve, reject) => {
                     this.watcher = chokidar.watch(this.dirname, {ignored: this.ignored, ignorePermissionErrors: true, ...this.options});
@@ -63,12 +58,12 @@ module.exports = class {
                     this.watcher.on('change', (path, stats) => this.on_file_added(this.connection.constructor.normalize_path(path), stats));
                     this.watcher.on('unlink', (path) => this.on_file_removed(this.connection.constructor.normalize_path(path)));
                     this.watcher.on('error', err => {
-                        this.logger.error("Walk failed with dirname: ", this.dirname, err);
+                        this.logger.error('Walk failed with dirname: ', this.dirname, err);
                         this.on_error(err);
                         reject();
                     });
                     this.watcher.on('ready', resolve);
-                }))
+                }));
         }
 
         this.now = moment().format('YYYYMMDDHHmmssSSS');
@@ -79,31 +74,31 @@ module.exports = class {
             on_file: (filename, stats) => {
                 if (!this.started) return;
                 if (!this.fileObjects[filename] || (this.fileObjects[filename] && stats.size !== this.fileObjects[filename].size)) {
-                    this.logger.info(this.connection.protocol + " walk adding: ", filename);
+                    this.logger.info(`${this.connection.protocol} walk adding: `, filename);
                     this.on_file_added(filename, stats);
                 }
                 this.fileObjects[filename] = {last_seen: this.now, size: stats.size};
             },
             on_error: err => {
-                this.logger.error(this.connection.protocol + " walk failed: ", err);
+                this.logger.error(`${this.connection.protocol} walk failed: `, err);
                 this.on_error(err);
             }
         })
-        .catch(err => {
-            this.logger.error("Walk failed with dirname: ", this.dirname, err);
-            this.on_error(err);
-        })
-        .then(() => {
-            for (let filename in this.fileObjects) {
-                if (this.fileObjects.hasOwnProperty(filename) && this.fileObjects[filename].last_seen !== this.now) {
-                    this.on_file_removed(filename);
-                    this.logger.info(this.connection.protocol.toUpperCase() + " walk removing: ", filename);
+            .catch(err => {
+                this.logger.error('Walk failed with dirname: ', this.dirname, err);
+                this.on_error(err);
+            })
+            .then(() => {
+                for (const filename in this.fileObjects) {
+                    if (this.fileObjects.hasOwnProperty(filename) && this.fileObjects[filename].last_seen !== this.now) {
+                        this.on_file_removed(filename);
+                        this.logger.info(`${this.connection.protocol.toUpperCase()} walk removing: `, filename);
+                    }
                 }
-            }
-            if (this.polling) this.timeout = setTimeout(() => {
-                this.loop_watcher();
-            }, this.polling);
-        })
+                if (this.polling) this.timeout = setTimeout(() => {
+                    this.loop_watcher();
+                }, this.polling);
+            });
     }
 
     start_watch() {
@@ -117,7 +112,7 @@ module.exports = class {
         return Promise.resolve()
             .then(() => {
                 this.started = false;
-                if (this.connection.protocol === "fs") return this.watcher?.close();
+                if (this.connection.protocol === 'fs') return this.watcher?.close();
             })
             .then(() => {
                 clearTimeout(this.timeout);
@@ -127,4 +122,4 @@ module.exports = class {
             })
             .then(() => this.on_watch_stop());
     }
-}
+};
