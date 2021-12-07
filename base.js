@@ -50,6 +50,13 @@ module.exports = class {
                         }, 300000);
                     });
                 return result;
+            })
+            .catch(err => {
+                if (control_release && slot_control?.keep_busy) slot_control.release_slot();
+                this.disconnect_timeout[slot] = setTimeout(() => {
+                    this.disconnect(slot);
+                }, 300000);
+                throw err;
             }), control_release);
     }
 
