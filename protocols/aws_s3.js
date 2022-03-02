@@ -112,7 +112,7 @@ module.exports = class extends base {
             const size = params?.size || 0;
             while (size / partSize > 10000) partSize *= 2;
             const options = {partSize, queueSize: params.concurrency || 8};
-            const stream = {passThrough: new Stream.PassThrough()};
+            const stream = new Stream.PassThrough();
             const result = this.S3.upload({Bucket: params.bucket || this.bucket, Key: target, Body: stream, ContentType: mime.lookup(target), StorageClass: params.storage_class, Tagging: qs.stringify(params.tags)}, options, err => {
                 if (err) reject(err);
                 slot_control.release_slot();
