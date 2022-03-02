@@ -196,8 +196,8 @@ module.exports = class extends base {
     }
 
     copy(source, target, params = {}) {
-        return this.restore(source, params).then(() => {
-            const size = params?.size;
+        return this.restore(source, params).then(stat => {
+            const size = stat?.size || params?.size;
             if (size < maxFileLength) {
                 return this.queue.run(slot => {
                     this.logger.debug(`AWS S3 (slot ${slot}) atomic local copy from ${source} to ${target}`);
