@@ -226,7 +226,7 @@ module.exports = class extends base {
                         end += partSize;
                         if (size - end < minPartSize) end = size;
 
-                        requests.push(this.copy_part(source, target, {...params, start, end, part})
+                        requests.push(this.copy_part(source, target, {...params, id, start, end, part})
                             .then(data => {
                                 map[data.part - 1] = {ETag: data.etag, PartNumber: data.part};
                                 publish(data.increase);
@@ -240,7 +240,7 @@ module.exports = class extends base {
                 }))
                 .catch(err => {
                     this.logger.error('Multipart Copy error: ', err);
-                    return this.abort_multipart().then(() => {throw err;});
+                    return this.abort_multipart(target, {...params, id}).then(() => {throw err;});
                 });
         });
     }
