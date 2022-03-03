@@ -1,9 +1,7 @@
-const moment = require('moment');
 const chokidar = require('chokidar');
 const fs = require('fs-extra');
 
 module.exports = class {
-    //(^|[\/\\])\.+([^\/\\\.]|$)/
     constructor({
         dirname,
         bucket,
@@ -25,7 +23,7 @@ module.exports = class {
         this.dirname = connection.constructor.normalize_path(dirname);
         this.bucket = bucket;
         this.ignored = ignored;
-        this.fileObjects = {};
+        this.filesDB = {};
         this.timeout = null;
         this.connection = connection;
         this.started = false;
@@ -65,19 +63,26 @@ module.exports = class {
                     this.watcher.on('ready', resolve);
                 }));
         }
+        const new_files = {};
 
-        this.now = moment().format('YYYYMMDDHHmmssSSS');
         return this.connection.walk({
             dirname: this.dirname,
             bucket: this.bucket,
             ignored: this.ignored,
             on_file: (filename, stats) => {
                 if (!this.started) return;
-                if (!this.fileObjects[filename] || (this.fileObjects[filename] && stats.size !== this.fileObjects[filename].size)) {
+                new_files[filename] = stats.size;
+                if (!this.filesDB.hasOwnProperty(filename)) {
                     this.logger.info(`${this.connection.protocol} walk adding: `, filename);
                     this.on_file_added(filename, stats);
                 }
-                this.fileObjects[filename] = {last_seen: this.now, size: stats.size};
+                else {
+                    if (stats.size !== this.filesDB[filename]) {
+                        this.logger.info(`${this.connection.protocol} walk adding: `, filename);
+                        this.on_file_added(filename, stats);
+                    }
+                    delete this.filesDB[filename];
+                }
             },
             on_error: err => {
                 this.logger.error(`${this.connection.protocol} walk failed: `, err);
@@ -89,15 +94,18 @@ module.exports = class {
                 this.on_error(err);
             })
             .then(() => {
-                for (const filename in this.fileObjects) {
-                    if (this.fileObjects.hasOwnProperty(filename) && this.fileObjects[filename].last_seen !== this.now) {
+                for (const filename in this.filesDB) {
+                    if (this.filesDB.hasOwnProperty(filename)) {
                         this.on_file_removed(filename);
                         this.logger.info(`${this.connection.protocol.toUpperCase()} walk removing: `, filename);
                     }
                 }
-                if (this.polling) this.timeout = setTimeout(() => {
-                    this.loop_watcher();
-                }, this.polling);
+                this.filesDB = new_files;
+                if (this.polling) {
+                    this.timeout = setTimeout(() => {
+                        this.loop_watcher();
+                    }, this.polling);
+                }
             });
     }
 
@@ -117,7 +125,7 @@ module.exports = class {
             .then(() => {
                 clearTimeout(this.timeout);
                 this.polling = false;
-                this.fileObjects = {};
+                this.filesDB = {};
                 this.timeout = null;
             })
             .then(() => this.on_watch_stop());
