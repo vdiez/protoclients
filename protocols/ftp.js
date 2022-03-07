@@ -123,8 +123,26 @@ module.exports = class extends base {
             .then(() => new Promise((resolve, reject) => {
                 this.logger.debug(`FTP (slot ${slot}) create write stream to: `, target);
                 slot_control.keep_busy = true;
-                const stream = new Stream.PassThrough();
+                const size = params?.size || 0;
+
+                let complete_transfer = () => {};
+                const complete_promise = new Promise(resolve_complete_transfer => {
+                    complete_transfer = resolve_complete_transfer;
+                });
+                let transferred = 0;
+                const stream = new Stream.Transform({
+                    transform(chunk, encoding, callback) {
+                        transferred += Buffer.byteLength(chunk);
+                        if (params.hasOwnProperty('size') && transferred >= size) {
+                            this.push(chunk);
+                            this.push(null);//signal end of read stream
+                            complete_promise.then(() => {callback();});//wait for upload to signal end of write stream
+                        }
+                        else callback(null, chunk);
+                    }
+                });
                 connection.put(stream, target, err => {
+                    complete_transfer();
                     if (err) reject(err);
                     slot_control.release_slot();
                 });
