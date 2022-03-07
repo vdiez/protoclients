@@ -67,10 +67,10 @@ module.exports = class extends base {
                 };
             })
             .catch(err => {
-                if (err.code === 'NotFound' && !filename.endsWith('/')) { //check if stating a dir
+                if (err.code === 'NotFound') {
                     return this.queue.run(slot => {
-                        this.logger.debug(`AWS S3 (slot ${slot}) stat: `, filename);
-                        return this.S3.listObjectsV2({Bucket: params.bucket || this.bucket, Prefix: filename}).promise();
+                        this.logger.debug(`AWS S3 (slot ${slot}) stat ${filename}/`);
+                        return this.S3.listObjectsV2({Bucket: params.bucket || this.bucket, Prefix: `${filename}/`}).promise(); //check if stating a dir
                     })
                         .then(data => {
                             if (data.Contents?.length) return {
