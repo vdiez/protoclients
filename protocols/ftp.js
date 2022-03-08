@@ -87,7 +87,7 @@ module.exports = class extends base {
                                     if (missing - length <= 0) {
                                         stream.destroy();
                                         finished = true;
-                                        callback(null, missing === length ? chunk : chunk.slice(0, missing));
+                                        callback(null, missing === length ? chunk : chunk.subarray(0, missing));
                                     }
                                     else {
                                         missing -= length;
@@ -123,7 +123,6 @@ module.exports = class extends base {
             .then(() => new Promise((resolve, reject) => {
                 this.logger.debug(`FTP (slot ${slot}) create write stream to: `, target);
                 slot_control.keep_busy = true;
-                const size = params?.size || 0;
 
                 let complete_transfer = () => {};
                 const complete_promise = new Promise(resolve_complete_transfer => {
@@ -133,7 +132,7 @@ module.exports = class extends base {
                 const stream = new Stream.Transform({
                     transform(chunk, encoding, callback) {
                         transferred += Buffer.byteLength(chunk);
-                        if (params.hasOwnProperty('size') && transferred >= size) {
+                        if (params.hasOwnProperty('size') && transferred >= params.size) {
                             this.push(chunk);
                             this.push(null);//signal end of read stream
                             complete_promise.then(() => {callback();});//wait for upload to signal end of write stream
